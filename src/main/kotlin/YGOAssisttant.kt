@@ -3,6 +3,7 @@ package Linmeng
 import net.mamoe.mirai.console.command.descriptor.ExperimentalCommandDescriptors
 import net.mamoe.mirai.console.plugin.jvm.JvmPluginDescription
 import net.mamoe.mirai.console.plugin.jvm.KotlinPlugin
+import net.mamoe.mirai.console.plugin.version
 import net.mamoe.mirai.console.util.ConsoleExperimentalApi
 import net.mamoe.mirai.contact.Contact.Companion.sendImage
 import net.mamoe.mirai.contact.nameCardOrNick
@@ -26,18 +27,29 @@ object YGOAssisttant : KotlinPlugin(
     JvmPluginDescription(
         id = "com.linmeng.YGOAssisttant",
         name = "YGOAssisttant",
-        version = "0.1.0",
+        version = "0.8.6",
     ) {
         author("linmeng")
     }
 ) {
-
     override fun onEnable() {
-        logger.info { "我草泥马" }
+        logger.info { "YGO助手插件开始加载" }
 
         Config.reload()
         GroupScribtion.reload()
         PersonalSubscription.reload()
+
+        logger.info{"配置与数据加载完毕"}
+
+        //获取更新信息
+        val webData = GetWebSourceCode("https://api.github.com/repos/I-linmeng-I/YGOAssistant/releases")
+
+        val lastVersion = Regex(""""tag_name": "(.*?)"""").find(webData)
+        if(lastVersion!=null){
+            if(version.toString() != lastVersion.groupValues[1]){
+                logger.info { "有版本更新！当前版本${version.toString()}。最新版本为${lastVersion.groupValues[1]}" }
+            }
+        }
 
         val command = Command()//消息处理类
 
@@ -159,5 +171,11 @@ object YGOAssisttant : KotlinPlugin(
         } else {
             inStream.close()
         }
+    }
+
+    fun GetWebSourceCode(url:String):String{
+
+        val doc = URL(url).readText()
+        return doc
     }
 }
