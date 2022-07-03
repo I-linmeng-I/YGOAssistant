@@ -1,0 +1,4 @@
+package Linmeng
+
+object Config {
+}

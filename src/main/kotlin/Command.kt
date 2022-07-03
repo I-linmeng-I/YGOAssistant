@@ -1,0 +1,4 @@
+package Linmeng
+
+class Command {
+}
