@@ -1,16 +1,17 @@
 package Linmeng
 
+import Linmeng.GroupScribtion.provideDelegate
 import net.mamoe.mirai.console.data.AutoSavePluginData
 import net.mamoe.mirai.console.data.value
 import java.net.URL
 import java.net.URLEncoder
 
-object GroupScribtion:AutoSavePluginData("GroupScribtionData") {
-    var data:MutableMap<Long,GroupData> by value()
+object PersonalSubscription: AutoSavePluginData("PersonalScribtionData") {
+    var data:MutableMap<Long,PersonalData> by value()
 }
 
 @kotlinx.serialization.Serializable
-data class GroupData(
+data class PersonalData(
     var SubscribedUser:MutableList<String>
 ){
     fun GetWebSourceCode(url:String):String{
