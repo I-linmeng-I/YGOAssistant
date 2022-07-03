@@ -47,10 +47,10 @@ object YGOAssisttant : KotlinPlugin(
 
         globalEventChannel().subscribeAlways<MessageEvent> {
             if(subject === sender){
-                returnMessage = command.ProcessingCommand(message.content, sender.id, -1)
+                returnMessage = command.ProcessingCommand(message.content, sender, -1)
             }
             else{
-                returnMessage = command.ProcessingCommand(message.content, sender.id, subject.id)
+                returnMessage = command.ProcessingCommand(message.content, sender, subject.id)
             }
 
             //返回消息不为空则返回消息
@@ -121,6 +121,12 @@ object YGOAssisttant : KotlinPlugin(
     private fun httpRequest(uri: String,cardName:String): String? {
         val path = "./data/YGOAssistant/CardImageCache/"
         val filePath = "$cardName.jpg"
+
+        val file1 = File(path+filePath)
+        if(file1.exists()){
+            return path+filePath
+        }
+
         val startTime = System.currentTimeMillis()
         val url = URL(uri)
         val conn: HttpURLConnection = url.openConnection() as HttpURLConnection
@@ -138,7 +144,7 @@ object YGOAssisttant : KotlinPlugin(
     @Throws(java.lang.Exception::class)
     private fun readInputStream(inStream: InputStream, filePath: String, path: String) {
         val file = File(path)
-        val file1 = File(filePath)
+        val file1 = File(path+filePath)
         if (!file.exists()) file.mkdirs()
         if (!file1.exists()) {
             val fos = FileOutputStream(File(path+filePath))

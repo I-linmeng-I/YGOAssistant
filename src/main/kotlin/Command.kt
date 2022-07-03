@@ -5,8 +5,10 @@ import io.ktor.client.*
 import io.ktor.client.engine.okhttp.*
 import io.ktor.client.features.websocket.*
 import io.ktor.http.cio.websocket.*
-import jdk.jshell.JShell.Subscription
 import kotlinx.coroutines.*
+import net.mamoe.mirai.Bot
+import net.mamoe.mirai.console.util.ContactUtils.getContactOrNull
+import net.mamoe.mirai.contact.Contact
 import java.lang.Double.parseDouble
 import java.math.RoundingMode
 import java.net.URL
@@ -15,7 +17,6 @@ import java.text.DecimalFormat
 import java.text.SimpleDateFormat
 import java.util.*
 import net.mamoe.mirai.utils.info
-import java.io.File
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 
@@ -172,7 +173,6 @@ class Command {
                         }
                     }
 
-
                     YGOAssisttant.logger.info {"初始化对局列表完成"}
                 }
                 "delete" ->{
@@ -202,6 +202,39 @@ class Command {
 
                         duelInfo.StartTime = formatted
                         duelInfo.GetPlayerInfo()
+
+                        val player1 = duelInfo.Player1
+                        val player2 = duelInfo.Player2
+
+
+
+                        PersonalSubscription.data.forEach{
+                            val userid= it.key
+
+
+                            var index = it.value.SubscribedUser.indexOfFirst { it ==  player1}
+
+                            if (index == -1){
+                                index = it.value.SubscribedUser.indexOfFirst { it ==  player2}
+                            }
+                            else{
+                                Bot.instances.forEach {
+                                    it.getContactOrNull(userid)
+                                        ?.sendMessage("你订阅的玩家：" + player1 + " 开始了和：" + player2 + "的对战")
+                                }
+                                return
+                            }
+
+                            if(index != -1){
+                                Bot.instances.forEach {
+                                    it.getContactOrNull(userid)
+                                        ?.sendMessage("你订阅的玩家：" + player2 + " 开始了和：" + player1 + "的对战")
+                                }
+                            }
+
+                        }
+
+
                         duelList.add(duelInfo)
 
                     }
@@ -437,8 +470,9 @@ class Command {
 
 
     //处理指令
-    suspend fun ProcessingCommand(arg: String,userID:Long,GroupID:Long):String{
+    suspend fun ProcessingCommand(arg: String,user:Contact,GroupID:Long):String{
 
+        val userID = user.id
 
         //MC相关
         //查分
@@ -936,7 +970,7 @@ class Command {
 
             val playerName = matchResult.groupValues[1]
 
-            var subData =  PersonalSubscription.data.getOrPut(userID.toLong()){ PersonalData(mutableListOf<String>())}
+            var subData =  PersonalSubscription.data.getOrPut(userID){ PersonalData(mutableListOf<String>())}
 
             return subData.AddSubscribeUser(playerName)
 
@@ -948,7 +982,7 @@ class Command {
 
             val playerName = matchResult.groupValues[1]
 
-            var subData =  PersonalSubscription.data.getOrPut(userID.toLong()){ PersonalData(mutableListOf<String>())}
+            var subData =  PersonalSubscription.data.getOrPut(userID){ PersonalData(mutableListOf<String>())}
 
             return subData.DissubscribeUser(playerName)
 
@@ -957,7 +991,7 @@ class Command {
         if(arg == "显示个人订阅"){
 
 
-            var subData =  PersonalSubscription.data.getOrPut(userID.toLong()){ PersonalData(mutableListOf<String>())}
+            var subData =  PersonalSubscription.data.getOrPut(userID){ PersonalData(mutableListOf<String>())}
 
             var returnMsg = "你订阅的玩家:"
 

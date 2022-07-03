@@ -3,6 +3,7 @@ package Linmeng
 import Linmeng.GroupScribtion.provideDelegate
 import net.mamoe.mirai.console.data.AutoSavePluginData
 import net.mamoe.mirai.console.data.value
+import net.mamoe.mirai.contact.Contact
 import java.net.URL
 import java.net.URLEncoder
 
