@@ -13,7 +13,9 @@ object PersonalSubscription: AutoSavePluginData("PersonalScribtionData") {
 
 @kotlinx.serialization.Serializable
 data class PersonalData(
-    var SubscribedUser:MutableList<String>
+    var SubscribedUser:MutableList<String>,
+    var PlayerToken:String = "0",
+    var PlayerName:String = "0"
 ){
     fun GetWebSourceCode(url:String):String{
 

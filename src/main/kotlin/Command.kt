@@ -1,14 +1,25 @@
 package Linmeng
 
 
+import Linmeng.YGOAssisttant.logger
 import io.ktor.client.*
 import io.ktor.client.engine.okhttp.*
+import io.ktor.client.features.*
 import io.ktor.client.features.websocket.*
+import io.ktor.client.request.forms.*
+import io.ktor.http.*
 import io.ktor.http.cio.websocket.*
 import kotlinx.coroutines.*
+import kotlinx.serialization.json.Json
 import net.mamoe.mirai.Bot
 import net.mamoe.mirai.console.util.ContactUtils.getContactOrNull
 import net.mamoe.mirai.contact.Contact
+import net.mamoe.mirai.contact.Contact.Companion.sendImage
+import net.mamoe.mirai.message.data.At
+import net.mamoe.mirai.message.data.AtAll
+import net.mamoe.mirai.message.data.Image
+import net.mamoe.mirai.message.data.buildMessageChain
+import net.mamoe.mirai.utils.ExternalResource.Companion.uploadAsImage
 import java.lang.Double.parseDouble
 import java.math.RoundingMode
 import java.net.URL
@@ -17,18 +28,58 @@ import java.text.DecimalFormat
 import java.text.SimpleDateFormat
 import java.util.*
 import net.mamoe.mirai.utils.info
+import java.io.File
+import java.io.FileInputStream
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
+import java.util.Base64
 
+class LoginCredentialException : HttpStatusCodeException(HttpStatusCode.BadRequest)
+
+open class HttpStatusCodeException(val code: HttpStatusCode) : RuntimeException()
 
 class Command {
 
     var UserSearchDataList =  hashSetOf<UserSearchData>()
     val duelList = mutableListOf<DuelInfo>()
 
-    val MSG_CANCEL_MONITOR_JOB = 1
-    val INTERVAL_LONG_TIME_NO_INIT = 5 * 1000L
+    private val loginclient = HttpClient(OkHttp) {
+        // when set to true (by default), an exception would thrown if the response http status code
+        // is not in 200-300
+        expectSuccess = false
+        install(HttpTimeout) {
+            socketTimeoutMillis = 5_000
+        }
+    }
 
+    suspend fun login(username: String, password: String): Result<String> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                val ret = loginclient.submitForm<String>(
+                    "https://api.moecube.com/accounts/" + "signin",
+                    Parameters.build {
+                        append("account", username)
+                        append("password", password)
+                    }, false
+                )
+                when {
+                    ret != "" -> return@runCatching ret
+                    else -> throw LoginCredentialException()
+
+                }
+            }
+        }
+
+    fun generateToken(id: Int): String {
+        val b = arrayOf(0xD0, 0x30, 0, 0, 0, 0)
+        val r = id % 0xFFFF + 1
+        for (t in b.indices step 2) {
+            val k = b[t + 1] shl 8 or b[t] xor r
+            b[t] = k and 0xFF
+            b[t + 1] = k ushr 8 and 0xFF
+        }
+        return Base64.getEncoder().encodeToString(ByteArray(b.size) { i -> (b[i] and 0xFF).toByte() })//.encode(ByteArray(b.size) { i -> (b[i] and 0xFF).toByte() }).toString()
+    }
 
     //排序
     fun GetSmaller(num1:Int,num2:Int):Int{
@@ -67,6 +118,25 @@ class Command {
             QuickSort(li,leftin,mid-1)
             QuickSort(li,mid+1,right)
         }
+    }
+
+    //敏感词匹配
+    fun WordsMatch(word:String):String{
+        val file = File("./data/YGOAssistant/")
+        val file1 = File("./data/YGOAssistant/WordsMatchLibrary.txt")
+        if (!file.exists()) file.mkdirs()
+        if (!file1.exists()){
+            //val filePath = "a.txt"
+            file1.appendText("")
+        }
+        val words = file1.readLines()
+
+        words.forEach{
+            val tempText = it
+            val index = word.indexOf(tempText)
+            if (index != -1) return "敏感词玩家"
+        }
+        return word
     }
 
     //计算时间
@@ -134,7 +204,7 @@ class Command {
     suspend fun LinkStart() {
         YGOAssisttant.logger.info { "开始尝试连接" }
         client.launch(Dispatchers.Default + SupervisorJob()) {
-            val ret = runCatching {
+            runCatching {
                 client.wss(host = "tiramisu.mycard.moe", port = 8923, path = "?filter=started") {
 //                    // cancel if long time no init event
 //                    handler.sendEmptyMessageDelayed(
@@ -154,7 +224,7 @@ class Command {
         if(eventRegex!=null){
             //            if (client.isActive) client.cancel()
             //YGOAssisttant.logger.info { "接收到MC对局数据 tpye="+ eventRegex.groupValues[1]}
-            when (val event = eventRegex.groupValues[1]) {
+            when (eventRegex.groupValues[1]) {
                 "init" -> {
 
                     val ResultMatch = Regex(""""id":"(.*?)",".*?"username":"(.*?)",".*?"username":"(.*?)","pos""").findAll(root).toList()
@@ -181,7 +251,7 @@ class Command {
                         val id = idRegex.groupValues[1]
                         val index = duelList.indexOfFirst { it.id == id }
                         if (index == -1) return
-                        val found = duelList.removeAt(index)
+                        duelList.removeAt(index)
                     }
 
                 }
@@ -205,33 +275,76 @@ class Command {
 
                         val player1 = duelInfo.Player1
                         val player2 = duelInfo.Player2
+                        val duelID = duelInfo.id
 
+                        //个人推送
+                        PersonalSubscription.data.forEach{ it ->
+                            GlobalScope.launch{
+                                val userid= it.key
+                                val playerToken=it.value.PlayerToken
+                                val playerName = it.value.PlayerName
 
+                                var index = it.value.SubscribedUser.indexOfFirst { it ==  player1}
 
-                        PersonalSubscription.data.forEach{
-                            val userid= it.key
-
-
-                            var index = it.value.SubscribedUser.indexOfFirst { it ==  player1}
-
-                            if (index == -1){
-                                index = it.value.SubscribedUser.indexOfFirst { it ==  player2}
-                            }
-                            else{
-                                Bot.instances.forEach {
-                                    it.getContactOrNull(userid)
-                                        ?.sendMessage("你订阅的玩家：" + player1 + " 开始了和：" + player2 + "的对战")
+                                if (index == -1){
+                                    index = it.value.SubscribedUser.indexOfFirst { it ==  player2}
                                 }
-                                return
-                            }
+                                else{
+                                    Bot.instances.forEach {bot ->
 
-                            if(index != -1){
-                                Bot.instances.forEach {
-                                    it.getContactOrNull(userid)
-                                        ?.sendMessage("你订阅的玩家：" + player2 + " 开始了和：" + player1 + "的对战")
+                                        val subject = bot.getContactOrNull(userid)
+                                        if(subject!=null){
+                                            var returnMsg="你订阅的玩家：" + WordsMatch(player1) + " 开始了和\n" + WordsMatch(player2) + " 的对战"
+                                            if(playerToken!="0"&& player1 != playerName){
+                                                returnMsg += "\n观战服务器为：tiramisu.mycard.moe\n端口为：8911\n观战房间密码为：$playerToken$duelID"
+                                            }
+                                            subject.sendMessage(returnMsg)
+                                        }
+
+                                        if(player1=="我是超级抽卡王"){
+
+                                            val subject1 = bot.getGroup(923717437)
+
+                                            if(subject1!=null){
+                                                val message = buildMessageChain {
+                                                    +Image(FileInputStream("./data/YGOAssistant/我是超级抽卡王.jpg").uploadAsImage(subject1).imageId)
+                                                    +AtAll
+                                                }
+                                                subject1.sendMessage(message)
+                                            }
+
+                                        }
+                                    }
+                                    return@launch
+                                }
+
+                                if(index != -1){
+                                    Bot.instances.forEach {bot ->
+
+
+                                        val subject = bot.getContactOrNull(userid)
+                                        if(subject!=null&& player2 != playerName){
+                                            var returnMsg="你订阅的玩家：" + WordsMatch(player2) + " 开始了和\n" + WordsMatch(player1) + " 的对战"
+                                            if(playerToken!="0"){
+                                                returnMsg += "\n观战服务器为：tiramisu.mycard.moe\n端口为：8911\n观战房间密码为：$playerToken$duelID"
+                                            }
+                                            subject.sendMessage(returnMsg)
+                                        }
+
+                                        if(player2=="我是超级抽卡王"){
+                                            val subject1 = bot.getGroup(923717437)
+
+                                            if(subject1!=null){
+                                                val message = buildMessageChain {
+                                                    +Image(FileInputStream("./data/YGOAssistant/我是超级抽卡王.jpg").uploadAsImage(subject1).imageId)
+                                                    +AtAll
+                                                }
+                                                subject1.sendMessage(message)
+                                            }
+                                        }
+                                    }
                                 }
                             }
-
                         }
 
 
@@ -424,9 +537,9 @@ class Command {
 
 
 
-        val  ResultMatch = Regex("""<h3><span>(\d*?)</span>&nbsp;[\s\S]*?<strong class="name"><span>(.*?)</span><br></strong>.*\s.*\s*(.*)""").findAll(WebData).toList()?:return "这完全没查到东西，你搜了啥啊"
+        val  resultMatch = Regex("""<h3><span>(\d*?)</span>&nbsp;[\s\S]*?<strong class="name"><span>(.*?)</span><br></strong>.*\s.*\s*(.*)""").findAll(WebData).toList()
 
-        if(ResultMatch.isEmpty()){
+        if(resultMatch.isEmpty()){
             return "没有找到相关的东西"
         }
         //输出文本
@@ -437,17 +550,17 @@ class Command {
         if(cardNumber!=0){
             //如果有特殊指令
             if(additionalInfo != ""){
-                return AdditionalCommandProcess(ResultMatch[cardNumber-1].groupValues[1],additionalInfo)
+                return AdditionalCommandProcess(resultMatch[cardNumber-1].groupValues[1],additionalInfo)
             }
-            return SearchCardInfo(ResultMatch,cardNumber)
+            return SearchCardInfo(resultMatch,cardNumber)
         }
 
-        if(page==0&&ResultMatch.size==1){
+        if(page==0&&resultMatch.size==1){
             return "只有一张卡"
         }
 
         //输出列表
-        ResultMatch.forEach {
+        resultMatch.forEach {
             //只输出10张
             if(resultNumber ==11){
                 return outPutResult
@@ -512,7 +625,7 @@ class Command {
             //获取网页数据
             var WebData = GetWebSourceCode("https://sapi.moecube.com:444/ygopro/arena/history?username=${playerNameInURL}&type=1&page_num=30")
 
-            val  ResultMatch = Regex(""""usernamea":"(.*?)","usernameb":"(.*?)","[\s\S]*?"pta":(.*?),"ptb":(.*?),"pta_ex":(.*?),"ptb_ex":(.*?),"[\s\S]*?"start_time":"(.*?)T(.*?).000Z","end_time":"(.*?)T(.*?).000Z","winner":"(.*?)","isfirstwin":(.*?),""").findAll(WebData).toList()?:return "u1s1是不是查错人了，这没查到东西啊"
+            val  ResultMatch = Regex(""""usernamea":"(.*?)","usernameb":"(.*?)","[\s\S]*?"pta":(.*?),"ptb":(.*?),"pta_ex":(.*?),"ptb_ex":(.*?),"[\s\S]*?"start_time":"(.*?)T(.*?).000Z","end_time":"(.*?)T(.*?).000Z","winner":"(.*?)","isfirstwin":(.*?),""").findAll(WebData).toList()
             if(ResultMatch.isEmpty()){
                 return "没这人的记录，要么没打过竞技要么没这人"
             }
@@ -570,12 +683,12 @@ class Command {
         }
 
         if(arg.startsWith("对战列表")){
-            val matchResult = Regex("""对战列表 -(\d*)""").find(arg)?:return "格式不对 格式为对战列表+空格+横杠+页码\n对战列表 -1"
+            val matchResult = Regex("""对战列表 (\d*)""").find(arg)?:return "格式不对 格式为对战列表 数字\n对战列表 1"
 
             val result = matchResult.groupValues[1]
 
             if(!IsNumber(result)){
-                return "格式不对 可以试试发\n对战列表 -1"
+                return "格式不对 可以试试发\n对战列表 1"
             }
 
             var page= result.toInt()
@@ -612,6 +725,9 @@ class Command {
             if(page.toInt()<1){
                 page = 1
             }
+            if((page-1)*30>=duelList.size){
+                return "超出最后一页"
+            }
 
             var endNum = page*30-1
 
@@ -619,19 +735,21 @@ class Command {
                 endNum = duelList.size-1
             }
 
-            for (i in (page-1)*30..endNum){
-                returnMsg += duelList[i].Player1 +"  排名："+duelList[i].player1Rank+"  胜率："+duelList[i].player1Ratio + "%"+ "\nVS"
+            for (i in ((page-1)*30)..endNum)
+            {
+
+                returnMsg +=WordsMatch( duelList[i].Player1) +
+                        "  排名："+duelList[i].player1Rank+"  胜率："+duelList[i].player1Ratio + "%"+ "\nVS"
 
                 if(duelList[i].StartTime!="-1"){
                     returnMsg += "    对局已过去时间："+CalculateTime(duelList[i].StartTime,formatted)+"\n"+
-                            duelList[i].Player2 + "  排名："+duelList[i].player2Rank+"  胜率："+duelList[i].player2Ratio+"%"+
-                            "{forwardmessage的分割符}"
+                            WordsMatch(duelList[i].Player2) + "  排名："+duelList[i].player2Rank+"  胜率："+duelList[i].player2Ratio+"%"
                 }
                 else{
                     returnMsg += "    对局已过去时间：未知\n"+
-                            duelList[i].Player2 + "  排名："+duelList[i].player2Rank+"  胜率："+duelList[i].player2Ratio+"%"+
-                            "{forwardmessage的分割符}"
+                            WordsMatch(duelList[i].Player2) + "  排名："+duelList[i].player2Rank+"  胜率："+duelList[i].player2Ratio+"%"
                 }
+                returnMsg += "\n对战房间ID:"+duelList[i].id + "\n" +"{forwardmessage的分割符}"
             }
             returnMsg += "MC对战列表"
             return returnMsg
@@ -790,30 +908,35 @@ class Command {
         }
 
         //进入单卡
-        if(IsNumber(arg)&&arg.toInt()>0&&arg.toInt()<11){
-            val IsInUserList = UpdateUserList(userID)//获得用户数据
+        if(arg.startsWith("进入单卡 ")){
+            val matchResult = Regex("""进入单卡 (\d*)""").find(arg)?:return "null"
+            val cardNumber = matchResult.groupValues[1]
 
-            //不存在则返回
-            if(IsInUserList.UserSearchContent == ""){
-                return "null"
-            }
-            else if(IsInUserList.UserSearchProcess.toInt() == 1)//如果是在单卡查询里了
-            {
-                //修改用户数据并添加到列表
-                IsInUserList.UserSearchCard = arg.toInt()
-                IsInUserList.UserSearchProcess = 1
-                UserSearchDataList.add(IsInUserList)
-                //返回单卡数据
-                return SearchCard(IsInUserList.UserSearchContent,(IsInUserList.UserSearchPage-1)*10,IsInUserList.UserSearchCard,"")
-            }
-            else//翻页//翻页
-            {
-                //修改用户数据并添加到列表
-                IsInUserList.UserSearchCard = arg.toInt()
-                IsInUserList.UserSearchProcess = 1
-                UserSearchDataList.add(IsInUserList)
-                //返回单卡数据
-                return SearchCard(IsInUserList.UserSearchContent,(IsInUserList.UserSearchPage-1)*10,IsInUserList.UserSearchCard,"")
+            if(cardNumber.toInt()<11){
+                val IsInUserList = UpdateUserList(userID)//获得用户数据
+
+                //不存在则返回
+                if(IsInUserList.UserSearchContent == ""){
+                    return "null"
+                }
+                else if(IsInUserList.UserSearchProcess.toInt() == 1)//如果是在单卡查询里了
+                {
+                    //修改用户数据并添加到列表
+                    IsInUserList.UserSearchCard = cardNumber.toInt()
+                    IsInUserList.UserSearchProcess = 1
+                    UserSearchDataList.add(IsInUserList)
+                    //返回单卡数据
+                    return SearchCard(IsInUserList.UserSearchContent,(IsInUserList.UserSearchPage-1)*10,IsInUserList.UserSearchCard,"")
+                }
+                else//翻页//翻页
+                {
+                    //修改用户数据并添加到列表
+                    IsInUserList.UserSearchCard = cardNumber.toInt()
+                    IsInUserList.UserSearchProcess = 1
+                    UserSearchDataList.add(IsInUserList)
+                    //返回单卡数据
+                    return SearchCard(IsInUserList.UserSearchContent,(IsInUserList.UserSearchPage-1)*10,IsInUserList.UserSearchCard,"")
+                }
             }
         }
 
@@ -1000,6 +1123,43 @@ class Command {
             }
             return returnMsg
         }
+
+        if(arg.startsWith("登录到萌卡 ")){
+            val matchResult = Regex("""登录到萌卡 (\S*) (\S*)""").find(arg)?:return "格式失败 格式为登录到萌卡 账号 密码"
+
+            val account = matchResult.groupValues[1]
+
+            val passWord = matchResult.groupValues[2]
+
+            val accountInfo = login(account,passWord)
+
+            if(accountInfo.isSuccess){
+                val accountIDMatch = Regex("""id":(\d*),"username":"(.*?)"""").find(accountInfo.toString())?:return "登录失败 请重试"
+                val token=generateToken(accountIDMatch.groupValues[1].toInt())
+
+                var subData =  PersonalSubscription.data.getOrPut(userID){ PersonalData(mutableListOf<String>())}
+
+                subData.PlayerToken = token
+                subData.PlayerName = accountIDMatch.groupValues[2]
+
+                return "账号名：" + accountIDMatch.groupValues[2] + "登录成功。\n你的观战和房间token为："+token+"\n如果忘了可以发 萌卡账号token 来随时查看"+
+                         "萌卡的ygo服务器为：tiramisu.mycard.moe\n竞技匹配端口为：8911\n观战房间密码为：你的token+对战房间ID"
+            }
+
+            return "登录失败，请检查你的账号密码"
+        }
+
+        if(arg == "萌卡账号token"){
+            var subData =  PersonalSubscription.data.getOrPut(userID){ PersonalData(mutableListOf<String>())}
+
+            if(subData.PlayerToken!="0"){
+                return "你当前绑定账号用户名为:"+subData.PlayerName+"\n你的观战和房间token为:"+subData.PlayerToken +
+                            "萌卡的ygo服务器为：tiramisu.mycard.moe\n竞技匹配端口为：8911\n观战房间密码为：你的token+对战房间ID"
+            }
+
+            return "你还没登录，先去登录吧"
+        }
+
         return "null"
     }
 

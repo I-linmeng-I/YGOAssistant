@@ -27,7 +27,7 @@ object YGOAssisttant : KotlinPlugin(
     JvmPluginDescription(
         id = "com.linmeng.YGOAssisttant",
         name = "YGOAssisttant",
-        version = "0.8.7",
+        version = "0.9.0",
     ) {
         author("linmeng")
     }
@@ -41,13 +41,16 @@ object YGOAssisttant : KotlinPlugin(
 
         logger.info{"配置与数据加载完毕"}
 
+        logger.info{"当前版本${version.toString()}"}
         //获取更新信息
         val webData = GetWebSourceCode("https://api.github.com/repos/I-linmeng-I/YGOAssistant/releases")
 
-        val lastVersion = Regex(""""tag_name": "(.*?)"""").find(webData)
+
+        val lastVersion = Regex("""tag_name":"(.*?)",""").find(webData)
+
         if(lastVersion!=null){
             if(version.toString() != lastVersion.groupValues[1]){
-                logger.info { "有版本更新！当前版本${version.toString()}。最新版本为${lastVersion.groupValues[1]}" }
+                logger.info { "有版本更新！最新版本为${lastVersion.groupValues[1]}" }
             }
         }
 
@@ -80,13 +83,12 @@ object YGOAssisttant : KotlinPlugin(
 
                     //val imageId: String = updateImage.uploadAsImage(subject).imageId
 
-                    var returnMsg = buildMessageChain {
-                        +message[0]
-                        +Image.fromId(updateImage.uploadAsImage(subject).imageId)
-                    }
+                    subject.sendMessage(message[0])
+                    subject.sendImage(updateImage)
 
-                    subject.sendMessage(returnMsg)
-                } else if (returnMessage.indexOf("{forwardmessage的分割符}") > -1) {
+
+                }
+                else if (returnMessage.indexOf("{forwardmessage的分割符}") > -1) {
 
                     val nodes = mutableListOf<ForwardMessage.Node>()
 
@@ -95,30 +97,39 @@ object YGOAssisttant : KotlinPlugin(
                     val preview = mutableListOf<String>("这里是ygo插件查询的返回结果", "如果需要寻找更多请用相关指令")
 
 
-                    for (i in 0..message.size - 2) {
+                    message.forEach {
                         nodes.add(
                             ForwardMessage.Node(
                                 bot.id,
-                                System.currentTimeMillis().toInt(),
+                                time = -System.currentTimeMillis().toInt(),
                                 bot.nameCardOrNick,
                                 buildMessageChain {
-                                    +message[i]
+                                    +it
                                 }
                             )
                         )
                     }
 
-                    val forward = ForwardMessage(
-                        preview,
-                        message[message.size - 1],
-                        message[message.size - 1],
-                        subject.id.toString(),
-                        message[message.size - 1],
-                        nodes
-                    )
 
-                    subject.sendMessage(forward)
-                } else {
+                    val forward = RawForwardMessage(nodes).render(object : ForwardMessage.DisplayStrategy {
+                        override fun generateTitle(forward: RawForwardMessage): String {
+                            return "查询到的${message[message.size-1]}"
+                        }
+
+                        override fun generateSummary(forward: RawForwardMessage): String {
+                            return "查看${nodes.size}条结果"
+                        }
+                    })
+
+                    try {
+                        subject.sendMessage(forward)
+                    }
+                    catch (e: RuntimeException) {
+                        logger.info { "报错了，$e" }
+                    }
+
+                }
+                else {
                     subject.sendMessage(returnMessage)
                 }
 
@@ -171,6 +182,7 @@ object YGOAssisttant : KotlinPlugin(
         } else {
             inStream.close()
         }
+
     }
 
     fun GetWebSourceCode(url:String):String{
