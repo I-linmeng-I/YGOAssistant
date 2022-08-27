@@ -48,7 +48,7 @@ class Command {
         // is not in 200-300
         expectSuccess = false
         install(HttpTimeout) {
-            socketTimeoutMillis = 5_000
+            socketTimeoutMillis = 5000
         }
     }
 
@@ -375,9 +375,8 @@ class Command {
         if(ResultMatch.size<cardNumber){
             return "已经是最后一张了"
         }
-        val CardData2 = GetWebSourceCode("https://ygocdb.com/card/"+ResultMatch[cardNumber-1].groupValues[1])
-        val availMatch = Regex("""OCG</i>[\s\S]*?(\S*)</span>""").find(CardData2)
-
+        val CardData2 = GetWebSourceCode("https://ygocdb.com/card/"+ResultMatch[cardNumber-1].groupValues[1]) 
+        val availMatch = Regex("""avail">[\s\S]*?(\S*)OCG</i>""").find(CardData2)
 
         val CardData = GetWebSourceCode("https://ygocdb.com/api/v0/?search="+ResultMatch[cardNumber-1].groupValues[1])
 
@@ -450,7 +449,7 @@ class Command {
 
         if(additionalInfo == "md卡包"){
             val WebData = GetWebSourceCode("https://www.ourocg.cn/search/"+cardNumber)
-            val  ResultMatch = Regex("""<tr><td><a href="/md_package/(\d*)\D*?>(.*?)<br/><small>(.*?)</small></a></td><td style="text-align:center">(.*?)</td></tr>""").findAll(WebData).toList()
+            val ResultMatch = Regex("""<tr><td><a href="/md_package/(\d*)\D*?>(.*?)<br/><small>(.*?)</small></a></td><td style="text-align:center">(.*?)</td></tr>""").findAll(WebData).toList()
             if (ResultMatch.isNotEmpty()){
                 returnMsg = "MD收录卡包:"
                 ResultMatch.forEach{
