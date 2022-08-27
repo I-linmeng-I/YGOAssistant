@@ -377,17 +377,18 @@ class Command {
         }
         val CardData2 = GetWebSourceCode("https://ygocdb.com/card/"+ResultMatch[cardNumber-1].groupValues[1]) 
         val avail = Regex("""<i class="(.*?)">""").find(CardData2)
+        var availMatch = ""
         if(avail = "l0"){
-            val availMatch = "禁止卡"
+            availMatch = "禁止卡"
         }
         else if(avail = "l1"){
-            val availMatch = "限制卡"
+            availMatch = "限制卡"
         }
         else if(avail = "l2"){
-            val availMatch = "准限制卡"
+            availMatch = "准限制卡"
         }
         else{
-            val availMatch = "无限制卡"
+            availMatch = "无限制卡"
         }
 
         val CardData = GetWebSourceCode("https://ygocdb.com/api/v0/?search="+ResultMatch[cardNumber-1].groupValues[1])
