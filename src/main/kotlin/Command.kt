@@ -376,7 +376,7 @@ class Command {
             return "已经是最后一张了"
         }
         val CardData2 = GetWebSourceCode("https://ygocdb.com/card/"+ResultMatch[cardNumber-1].groupValues[1]) 
-        val availMatch = Regex("""avail">[\s\S]*?(\S*)OCG</i>""").find(CardData2)
+        val availMatch = Regex("""<i class="(.*?)">""").find(CardData2)
 
         val CardData = GetWebSourceCode("https://ygocdb.com/api/v0/?search="+ResultMatch[cardNumber-1].groupValues[1])
 
