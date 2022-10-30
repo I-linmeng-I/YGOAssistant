@@ -83,8 +83,17 @@ object YGOAssisttant : KotlinPlugin(
 
                     //val imageId: String = updateImage.uploadAsImage(subject).imageId
 
-                    subject.sendMessage(message[0])
-                    subject.sendImage(updateImage)
+                    if (returnMessage.indexOf("{分割多段}") > -1) {
+                        val message1 = message[0].split("{分割多段}")
+                        message1.forEach{
+                            subject.sendMessage(it)
+                        }
+                        subject.sendImage(updateImage)
+                    }
+                    else{
+                        subject.sendMessage(message[0])
+                        subject.sendImage(updateImage)
+                    }
 
 
                 }
@@ -110,6 +119,7 @@ object YGOAssisttant : KotlinPlugin(
                         )
                     }
 
+                    nodes.removeAt(nodes.size-1)
 
                     val forward = RawForwardMessage(nodes).render(object : ForwardMessage.DisplayStrategy {
                         override fun generateTitle(forward: RawForwardMessage): String {

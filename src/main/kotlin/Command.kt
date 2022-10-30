@@ -10,6 +10,7 @@ import io.ktor.client.request.forms.*
 import io.ktor.http.*
 import io.ktor.http.cio.websocket.*
 import kotlinx.coroutines.*
+import kotlinx.coroutines.channels.ClosedReceiveChannelException
 import kotlinx.serialization.json.Json
 import net.mamoe.mirai.Bot
 import net.mamoe.mirai.console.util.ContactUtils.getContactOrNull
@@ -22,14 +23,13 @@ import net.mamoe.mirai.message.data.buildMessageChain
 import net.mamoe.mirai.utils.ExternalResource.Companion.uploadAsImage
 import java.lang.Double.parseDouble
 import java.math.RoundingMode
-import java.net.URL
-import java.net.URLEncoder
 import java.text.DecimalFormat
 import java.text.SimpleDateFormat
 import java.util.*
 import net.mamoe.mirai.utils.info
 import java.io.File
 import java.io.FileInputStream
+import java.net.*
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import java.util.Base64
@@ -42,6 +42,8 @@ class Command {
 
     var UserSearchDataList =  hashSetOf<UserSearchData>()
     val duelList = mutableListOf<DuelInfo>()
+
+
 
     private val loginclient = HttpClient(OkHttp) {
         // when set to true (by default), an exception would thrown if the response http status code
@@ -195,35 +197,61 @@ class Command {
 
 
     //连接MC和接收处理数据
-    private val client = HttpClient(OkHttp) {
+    private var client = HttpClient(OkHttp) {
         install(WebSockets) {
             pingInterval = 10_000
+        }
+        install(HttpTimeout) {
+            socketTimeoutMillis = 10_000
         }
     }
 
     suspend fun LinkStart() {
         YGOAssisttant.logger.info { "开始尝试连接" }
-        client.launch(Dispatchers.Default + SupervisorJob()) {
-            runCatching {
-                client.wss(host = "tiramisu.mycard.moe", port = 8923, path = "?filter=started") {
-//                    // cancel if long time no init event
-//                    handler.sendEmptyMessageDelayed(
-//                        MSG_CANCEL_MONITOR_JOB, INTERVAL_LONG_TIME_NO_INIT
-//                    )
-                    while (isActive) (incoming.receive() as? Frame.Text)?.parse()
-                }
+        var ret = runCatching {client.wss(host = "tiramisu.mycard.moe", port = 8923, path = "?filter=started") {
+                //                    // cancel if long time no init event
+                //                    handler.sendEmptyMessageDelayed(
+                //                        MSG_CANCEL_MONITOR_JOB, INTERVAL_LONG_TIME_NO_INIT
+                //                    )
+                while (isActive) (incoming.receive() as? Frame.Text)?.parse()
             }
+        }
+        if (ret.exceptionOrNull()!=null){
+            restart()
+        }
+    }
+
+
+    private suspend fun restart(){
+        duelList.clear()
+        client.close()
+        client.cancel()
+        client = HttpClient(OkHttp) {
+            install(WebSockets) {
+                pingInterval = 10_000
+            }
+            install(HttpTimeout) {
+                socketTimeoutMillis = 10_000
+            }
+        }
+        LinkStart()
+        delay(5000)
+        if(duelList.isEmpty()){
+            restart()
         }
     }
 
     private suspend fun Frame.Text.parse() {
+
+
         val root = readText()
 
         val eventRegex = Regex(""""event":"(.*?)","""").find(root)
 
         if(eventRegex!=null){
+
             //            if (client.isActive) client.cancel()
-            //YGOAssisttant.logger.info { "接收到MC对局数据 tpye="+ eventRegex.groupValues[1]}
+            YGOAssisttant.logger.info { "接收到MC对局数据 tpye="+ eventRegex.groupValues[1]}
             when (eventRegex.groupValues[1]) {
                 "init" -> {
 
@@ -294,7 +322,7 @@ class Command {
 
                                         val subject = bot.getContactOrNull(userid)
                                         if(subject!=null){
-                                            var returnMsg="你订阅的玩家：" + WordsMatch(player1) + " 开始了和\n" + WordsMatch(player2) + " 的对战"
+                                            var returnMsg="你订阅的玩家：" + WordsMatch(player1) + " \n开始了和\n" + WordsMatch(player2) + " 的对战"
                                             if(playerToken!="0"&& player1 != playerName){
                                                 returnMsg += "\n观战服务器为：tiramisu.mycard.moe\n端口为：8911\n观战房间密码为：$playerToken$duelID"
                                             }
@@ -308,7 +336,7 @@ class Command {
                                             if(subject1!=null){
                                                 val message = buildMessageChain {
                                                     +Image(FileInputStream("./data/YGOAssistant/我是超级抽卡王.jpg").uploadAsImage(subject1).imageId)
-                                                    +AtAll
+                                                    //+AtAll
                                                 }
                                                 subject1.sendMessage(message)
                                             }
@@ -324,7 +352,7 @@ class Command {
 
                                         val subject = bot.getContactOrNull(userid)
                                         if(subject!=null&& player2 != playerName){
-                                            var returnMsg="你订阅的玩家：" + WordsMatch(player2) + " 开始了和\n" + WordsMatch(player1) + " 的对战"
+                                            var returnMsg="你订阅的玩家：" + WordsMatch(player2) + " \n开始了和\n" + WordsMatch(player1) + " 的对战"
                                             if(playerToken!="0"){
                                                 returnMsg += "\n观战服务器为：tiramisu.mycard.moe\n端口为：8911\n观战房间密码为：$playerToken$duelID"
                                             }
@@ -337,7 +365,7 @@ class Command {
                                             if(subject1!=null){
                                                 val message = buildMessageChain {
                                                     +Image(FileInputStream("./data/YGOAssistant/我是超级抽卡王.jpg").uploadAsImage(subject1).imageId)
-                                                    +AtAll
+                                                    //+AtAll
                                                 }
                                                 subject1.sendMessage(message)
                                             }
@@ -358,7 +386,6 @@ class Command {
             }
         }
 
-
     }
 
 
@@ -375,16 +402,17 @@ class Command {
         if(ResultMatch.size<cardNumber){
             return "已经是最后一张了"
         }
-        val CardData2 = GetWebSourceCode("https://ygocdb.com/card/"+ResultMatch[cardNumber-1].groupValues[1]) 
-        var avail = Regex("""<i class="(.*?)">""").find(CardData2)
+        val CardData2 = GetWebSourceCode("https://ygocdb.com/card/"+ResultMatch[cardNumber-1].groupValues[1])
+
+        var avail = Regex("""<i class="(.*?)">""").find(CardData2).toString()
         var availMatch = ""
-        if(avail = "l0"){
+        if(avail == "l0"){
             availMatch = "禁止卡"
         }
-        else if(avail = "l1"){
+        else if(avail == "l1"){
             availMatch = "限制卡"
         }
-        else if(avail = "l2"){
+        else if(avail == "l2"){
             availMatch = "准限制卡"
         }
         else{
@@ -418,11 +446,11 @@ class Command {
         outPutResult+="卡片ID："+ResultMatch[cardNumber-1].groupValues[1]
 
         if(availMatch !=null){
-            outPutResult+= "\n禁限情况："+availMatch.groupValues[1]
+            outPutResult+= "\n禁限情况："+availMatch + "{分割多段}"
         }
 
         if(PEffect!=""){
-            outPutResult+="\n灵摆效果："
+            outPutResult+="灵摆效果："
             if(PEffect.indexOf("\\r")>-1){
                 val effect = PEffect.split("\\r\\n")
                 effect.forEach{
@@ -438,7 +466,7 @@ class Command {
             outPutResult+="怪兽效果：\n"
         }
         else{
-            outPutResult+="\n效果或描述：\n"
+            outPutResult+="效果或描述：\n"
         }
         if(cardEffect.indexOf("\\r")>-1){
             val effect = cardEffect.split("\\r\\n")
@@ -452,6 +480,7 @@ class Command {
                 outPutResult+=it+"\n"
             }
         }
+
         return outPutResult+"{加入图片}：url：${ResultMatch[cardNumber-1].groupValues[1]}"
     }
 
@@ -574,7 +603,7 @@ class Command {
         //输出列表
         resultMatch.forEach {
             //只输出10张
-            if(resultNumber ==11){
+            if(resultNumber == 11){
                 return outPutResult
             }
 
@@ -588,6 +617,9 @@ class Command {
             else{
                 outPutResult +=monsterMatch.groupValues[1]+"\n身板："+ monsterMatch.groupValues[2]+"\n"
             }
+
+            outPutResult += "{forwardmessage的分割符}"
+
             resultNumber++
         }
         return outPutResult
@@ -747,27 +779,61 @@ class Command {
                 endNum = duelList.size-1
             }
 
+            var token = ""
+            val subData =  PersonalSubscription.data.getOrPut(userID){ PersonalData(mutableListOf<String>())}
+            if(subData.PlayerToken!="0"){
+                token = subData.PlayerToken
+            }
+
             for (i in ((page-1)*30)..endNum)
             {
 
                 returnMsg +=WordsMatch( duelList[i].Player1) +
-                        "  排名："+duelList[i].player1Rank+"  胜率："+duelList[i].player1Ratio + "%"+ "\nVS"
+                        "  排名："+duelList[i].player1Rank+"  胜率："+duelList[i].player1Ratio + "%"+ "\nVS\n"
 
                 if(duelList[i].StartTime!="-1"){
-                    returnMsg += "    对局已过去时间："+CalculateTime(duelList[i].StartTime,formatted)+"\n"+
-                            WordsMatch(duelList[i].Player2) + "  排名："+duelList[i].player2Rank+"  胜率："+duelList[i].player2Ratio+"%"
+                    returnMsg +=WordsMatch(duelList[i].Player2) + "  排名："+duelList[i].player2Rank+"  胜率："+duelList[i].player2Ratio+"%"+
+                            "\n对局已过去时间："+CalculateTime(duelList[i].StartTime,formatted)+"\n"
                 }
                 else{
-                    returnMsg += "    对局已过去时间：未知\n"+
-                            WordsMatch(duelList[i].Player2) + "  排名："+duelList[i].player2Rank+"  胜率："+duelList[i].player2Ratio+"%"
+                    returnMsg += WordsMatch(duelList[i].Player2) + "  排名："+duelList[i].player2Rank+"  胜率："+duelList[i].player2Ratio+"%"+
+                            "\n对局已过去时间：未知\n"
                 }
-                returnMsg += "\n对战房间ID:"+duelList[i].id + "\n" +"{forwardmessage的分割符}"
+                if(token != ""){
+                    returnMsg += "\n对战房间密码:"+token+duelList[i].id  +"{forwardmessage的分割符}"
+                }
+                else{
+                    returnMsg += "{forwardmessage的分割符}"
+                }
+
             }
             returnMsg += "MC对战列表"
             return returnMsg
         }
+
+        if(arg == "查萌卡排名"){
+            var webData = GetWebSourceCode("https://sapi.moecube.com:444/ygopro/arena/users?o=pt")
+            val resultMatch = Regex(""""username":"(.*?)",[\s\S]*?"pt":(.*?),[\s\S]*?"athletic_win":(\d*),[\s\S]*?"athletic_lose":(\d*),[\s\S]*?"athletic_draw":(\d*),""").
+                    findAll(webData).toList()
+
+            if(resultMatch.isNotEmpty()){
+                var returnMsg = ""
+                var rank = 1
+
+                resultMatch.forEach{
+                    returnMsg +=rank.toString() +". 玩家名：" + WordsMatch(it.groupValues[1]) + "\n胜率：" +
+                            "%.2f".format((it.groupValues[3].toFloat()/(it.groupValues[3].toFloat()+it.groupValues[4].toFloat()+it.groupValues[5].toFloat()))*100) +
+                            "% D.P："+it.groupValues[2].toFloat().toInt().toString() + "{forwardmessage的分割符}"
+                    rank ++
+                }
+
+                returnMsg += "萌卡天梯排名"
+                return returnMsg
+            }
+        }
+
         //连接MC服务器相关
-        if(arg == "Link Start!"){
+        if(arg == "unicorn!"){
             val index = Config.admin.indexOfFirst { it ==  userID}
             if (index == -1) return "你不是管理员，关于如何添加管理员。可以去GitHub上看readme"
 
@@ -775,11 +841,17 @@ class Command {
             LinkStart()
             delay(5000)
             if(duelList.isEmpty()){
+                client.close()
                 client.cancel()
-                return "开始连接MC服务器了！但是，啊，没连上"
+                client = HttpClient(OkHttp) {
+                    install(WebSockets) {
+                        pingInterval = 10_000
+                    }
+                }
+                return "呜呜呜，没连上"
             }
             else{
-                return "超级连接模式。连接完毕！"
+                return "NT-D!Start!"
             }
         }
 
@@ -787,7 +859,13 @@ class Command {
             val index = Config.admin.indexOfFirst { it ==  userID}
             if (index == -1) return "你不是管理员，关于如何添加管理员。可以去GitHub上看readme"
             duelList.clear()
+            client.close()
             client.cancel()
+            client = HttpClient(OkHttp) {
+                install(WebSockets) {
+                    pingInterval = 10_000
+                }
+            }
             return "关了,离开了，不要爱了"
         }
 
@@ -1128,10 +1206,18 @@ class Command {
 
             var subData =  PersonalSubscription.data.getOrPut(userID){ PersonalData(mutableListOf<String>())}
 
-            var returnMsg = "你订阅的玩家:"
+            var returnMsg = ""
 
             subData.SubscribedUser.forEach{
-                returnMsg +="\n" + it
+                val playerNameInURL = URLEncoder.encode( it,"UTF-8")
+                var WebData = GetWebSourceCode("https://sapi.moecube.com:444/ygopro/arena/user?username=${playerNameInURL}")
+
+                val  PlayerinfoMatch1 = Regex(""","pt":(\d*),".*?"athletic_wl_ratio":"(.*?)","arena_rank":(.*?)}""").find(WebData)
+
+                if(PlayerinfoMatch1!=null){
+                    returnMsg += "玩家："+it+"\nD.P:"+PlayerinfoMatch1.groupValues[1]+"\n排名："+
+                            PlayerinfoMatch1.groupValues[3]+"\n胜率:"+PlayerinfoMatch1.groupValues[2]+"{forwardmessage的分割符}"
+                }
             }
             return returnMsg
         }
@@ -1171,6 +1257,7 @@ class Command {
 
             return "你还没登录，先去登录吧"
         }
+
 
         return "null"
     }
