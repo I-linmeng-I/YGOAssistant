@@ -32,7 +32,7 @@ object YGOAssisttant : KotlinPlugin(
     JvmPluginDescription(
         id = "com.linmeng.YGOAssisttant",
         name = "YGOAssisttant",
-        version = "0.9.0",
+        version = "1.2.0",
     ) {
         author("linmeng")
     }
