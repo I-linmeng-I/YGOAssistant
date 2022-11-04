@@ -202,7 +202,7 @@ class Command {
 
 
     //连接MC和接收处理数据
-    var client = HttpClient(OkHttp) {
+    private var client = HttpClient(OkHttp) {
         BrowserUserAgent()
         install(WebSockets) {
             pingInterval = 1000
@@ -221,7 +221,7 @@ class Command {
     suspend fun LinkStart() {
         runCatching {
             client.wss(host = "tiramisu.mycard.moe", port = 8923, path = "?filter=started") {
-                while (client.isActive) {
+                while (isActive) {
                     //val current = LocalDateTime.now()
 
                     //val formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")

@@ -40,9 +40,9 @@ object YGOAssisttant : KotlinPlugin(
 
     val command = Command()
 
+
     override fun onEnable() {
         logger.info { "YGO助手插件开始加载" }
-
 
         Config.reload()
         GroupScribtion.reload()
