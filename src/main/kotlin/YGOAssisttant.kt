@@ -1,5 +1,10 @@
 package Linmeng
 
+import Linmeng.Data.PluginData.GroupPlayerTags
+import io.ktor.client.*
+import io.ktor.client.engine.okhttp.*
+import io.ktor.client.plugins.*
+import io.ktor.client.plugins.websocket.*
 import net.mamoe.mirai.console.command.descriptor.ExperimentalCommandDescriptors
 import net.mamoe.mirai.console.plugin.jvm.JvmPluginDescription
 import net.mamoe.mirai.console.plugin.jvm.KotlinPlugin
@@ -32,12 +37,21 @@ object YGOAssisttant : KotlinPlugin(
         author("linmeng")
     }
 ) {
+
+    val command = Command()
+
     override fun onEnable() {
         logger.info { "YGO助手插件开始加载" }
+
 
         Config.reload()
         GroupScribtion.reload()
         PersonalSubscription.reload()
+        GroupPlayerTags.reload()
+
+        if(Config.help == ""){
+            Config.help = "https://github.com/I-linmeng-I/YGOAssistant/blob/master/README.md"
+        }
 
         logger.info{"配置与数据加载完毕"}
 
@@ -54,7 +68,7 @@ object YGOAssisttant : KotlinPlugin(
             }
         }
 
-        val command = Command()//消息处理类
+        //消息处理类
 
 
 
@@ -149,6 +163,7 @@ object YGOAssisttant : KotlinPlugin(
 
 
     }
+
 
     @Throws(Exception::class)
     private fun httpRequest(uri: String,cardName:String): String? {

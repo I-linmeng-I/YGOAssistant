@@ -5,4 +5,6 @@ import net.mamoe.mirai.console.data.value
 
 object Config:AutoSavePluginConfig("config") {
     val admin: MutableList<Long> by value()
+    var help: String by value()
+
 }
