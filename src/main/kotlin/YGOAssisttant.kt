@@ -64,7 +64,7 @@ object YGOAssisttant : KotlinPlugin(
 
         if(lastVersion!=null){
             if(version.toString() != lastVersion.groupValues[1]){
-                logger.info { "有版本更新！最新版本为${lastVersion.groupValues[1]}" }
+                logger.error("有版本更新！最新版本为${lastVersion.groupValues[1]}")
             }
         }
 
