@@ -895,9 +895,9 @@ class Command {
             if (index == -1) return "你不是管理员，关于如何添加管理员。可以去GitHub上看readme"
 
             duelList.clear()
+            return "在连了"
             LinkStart()
 
-            return "在连了"
         }
 
         if(arg == "关闭连接"){
