@@ -22,4 +22,5 @@ dependencies {
     // ktor serialization
     implementation("io.ktor:ktor-client-content-negotiation:2.1.1")
     implementation("io.ktor:ktor-serialization-kotlinx-json:2.1.1")
+    implementation("org.jfree:jfreechart:1.5.4")
 }

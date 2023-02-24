@@ -3,7 +3,6 @@ package Linmeng
 
 import Linmeng.Data.PluginData.GroupPlayerTags
 import Linmeng.Data.PluginData.TagGroupData
-import Linmeng.YGOAssisttant.configFolder
 import Linmeng.YGOAssisttant.logger
 import io.ktor.client.*
 import io.ktor.client.engine.okhttp.*
@@ -14,30 +13,36 @@ import io.ktor.client.statement.*
 import io.ktor.http.*
 import io.ktor.websocket.*
 import kotlinx.coroutines.*
-import kotlinx.coroutines.channels.ClosedReceiveChannelException
-import kotlinx.serialization.json.Json
 import net.mamoe.mirai.Bot
 import net.mamoe.mirai.console.util.ContactUtils.getContactOrNull
 import net.mamoe.mirai.contact.Contact
-import net.mamoe.mirai.contact.Contact.Companion.sendImage
-import net.mamoe.mirai.message.data.At
-import net.mamoe.mirai.message.data.AtAll
-import net.mamoe.mirai.message.data.Image
-import net.mamoe.mirai.message.data.buildMessageChain
-import net.mamoe.mirai.utils.ExternalResource.Companion.uploadAsImage
+import net.mamoe.mirai.utils.info
+import org.jfree.chart.ChartFactory
+import org.jfree.chart.ChartUtils
+import org.jfree.chart.block.BlockBorder
+import org.jfree.chart.date.SpreadsheetDate
+import org.jfree.chart.labels.StandardPieSectionLabelGenerator
+import org.jfree.chart.plot.*
+import org.jfree.chart.ui.HorizontalAlignment
+import org.jfree.chart.ui.RectangleEdge
+import org.jfree.chart.ui.RectangleInsets
+import org.jfree.data.general.DefaultPieDataset
+import org.jfree.data.general.PieDataset
+import java.awt.Font
+import java.io.File
+import java.io.FileOutputStream
+import java.io.IOException
 import java.lang.Double.parseDouble
 import java.math.RoundingMode
+import java.net.URL
+import java.net.URLEncoder
 import java.text.DecimalFormat
 import java.text.SimpleDateFormat
-import java.util.*
-import net.mamoe.mirai.utils.info
-import okio.Timeout
-import java.io.File
-import java.io.FileInputStream
-import java.net.*
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
-import java.util.Base64
+import java.util.*
+import javax.imageio.ImageIO
+
 
 class LoginCredentialException : HttpStatusCodeException(HttpStatusCode.BadRequest)
 
@@ -59,23 +64,25 @@ class Command {
         }
     }
 
-    suspend fun login(username: String, password: String): Result<String> =
+    suspend fun login(username: String, password: String): String =
         withContext(Dispatchers.IO) {
             runCatching {
-                val ret = loginclient.submitForm(
+                val ret: String = loginclient.submitForm(
                     "https://api.moecube.com/accounts/" + "signin",
                     Parameters.build {
                         append("account", username)
                         append("password", password)
                     }, false
                 ).bodyAsText()
-                when {
-                    ret != "" -> return@runCatching ret
-                    else -> throw LoginCredentialException()
 
+                if(ret!=""){
+                    return@runCatching ret
+                }
+                else{
+                    throw LoginCredentialException()
                 }
             }
-        }
+        }.toString()
 
     fun generateToken(id: Int): String {
         val b = arrayOf(0xD0, 0x30, 0, 0, 0, 0)
@@ -219,7 +226,8 @@ class Command {
 
 
     suspend fun LinkStart() {
-        runCatching {
+
+        runCatching{
             client.wss(host = "tiramisu.mycard.moe", port = 8923, path = "?filter=started") {
                 while (isActive) {
                     //val current = LocalDateTime.now()
@@ -401,7 +409,7 @@ class Command {
                                         if(subject!=null&& player2 != playerName){
                                             var returnMsg="你订阅的玩家：" + WordsMatch(player2) + " \n开始了和\n" + WordsMatch(player1) + " 的对战"
                                             if(playerToken!="0"){
-                                                returnMsg += "\n观战服务器为：tiramisu.mycard.moe\n端口为：8911\n观战房间密码为：$playerToken$duelID"
+                                                returnMsg += "\n\n\n观战服务器为：tiramisu.mycard.moe\n端口为：8911\n观战房间密码为：$playerToken$duelID"
                                             }
                                             subject.sendMessage(returnMsg)
                                         }
@@ -895,9 +903,9 @@ class Command {
             if (index == -1) return "你不是管理员，关于如何添加管理员。可以去GitHub上看readme"
 
             duelList.clear()
-            return "在连了"
             LinkStart()
 
+            return "在连了"
         }
 
         if(arg == "关闭连接"){
@@ -1266,8 +1274,8 @@ class Command {
 
             val accountInfo = login(account,passWord)
 
-            if(accountInfo.isSuccess){
-                val accountIDMatch = Regex("""id":(\d*),"username":"(.*?)"""").find(accountInfo.toString())?:return "登录失败 请重试"
+            if(accountInfo != ""){
+                val accountIDMatch = Regex("""id":(\d*),"username":"(.*?)"""").find(accountInfo)?:return accountInfo
                 val token=generateToken(accountIDMatch.groupValues[1].toInt())
 
                 var subData =  PersonalSubscription.data.getOrPut(userID){ PersonalData(mutableListOf<String>())}
@@ -1293,6 +1301,99 @@ class Command {
             return "你还没登录，先去登录吧"
         }
 
+        if(arg == "测试"){
+
+            var WebData = GetWebSourceCode("https://sapi.moecube.com:444/ygopro/analytics/deck/type?type=day&source=mycard-athletic")
+
+            val resultMatch = Regex(""""name":"(.*?)","recent_time":".*?count":"(.*?)",".*?,"win":"(.*?)","draw":".*?","lose":"(.*?)"},.*?"win":"(.*?)","draw":".*?","lose":"(.*?)"""").
+            findAll(WebData).toList()
+
+            var returnMsg = ""
+
+            val dataset = DefaultPieDataset<String>()
+
+//            var totalNum = 0
+//
+//            for(i in 0..24){
+//                totalNum += resultMatch[i].groupValues[2].toInt()
+//            }
+
+            if(resultMatch.isNotEmpty()){
+                for(i in 0..24){
+                    dataset.setValue(resultMatch[i].groupValues[1].toString(), resultMatch[i].groupValues[2].toInt())
+                }
+            }
+
+            // 创建数据集
+
+            // 创建数据集
+
+
+            // 创建JFreeChart对象
+
+
+            // 创建JFreeChart对象
+            val chart = ChartFactory.createPieChart(
+                "萌卡前20使用率卡组饼图",  // 图表标题
+                dataset,  // 数据集
+                true,  // 是否显示图例
+                true,  // 是否生成工具提示
+                false // 是否生成URL链接
+            )
+
+            val plot = chart.plot as PiePlot<String>
+            val font = Font("宋体", Font.BOLD, 16)
+            plot.labelFont = Font("宋体", Font.BOLD, 12)
+
+            plot.labelBackgroundPaint = null
+
+            var labelGenerator = StandardPieSectionLabelGenerator("{0} ({2})", Locale.CHINA)
+            plot.labelGenerator = labelGenerator
+
+            val legend = chart.legend
+            legend.itemFont = font
+
+
+            val labelGeneratorr = object : StandardPieSectionLabelGenerator() {
+                override fun generateSectionLabel(dataset: PieDataset<*>?, key: Comparable<*>?): String {
+                    var label = super.generateSectionLabel(dataset, key)
+                    for(i in 0..24){
+                        if(label == resultMatch[i].groupValues[1]){
+                            val rate = ((resultMatch[i].groupValues[3].toFloat() + resultMatch[i].groupValues[5].toFloat())/
+                                    (resultMatch[i].groupValues[3].toFloat() + resultMatch[i].groupValues[5].toFloat() +
+                                        resultMatch[i].groupValues[4].toFloat() +resultMatch[i].groupValues[6].toFloat()))*100
+                            label += " 使用数：" + resultMatch[i].groupValues[2] + " 综合胜率：" + "%.2f".format(rate) +"%"
+                        }
+                    }
+                    return label
+                }
+            }
+
+            plot.legendLabelGenerator = labelGeneratorr
+
+            legend.position = RectangleEdge.RIGHT
+            legend.setMargin(0.0, 0.0, 0.0, 10.0)
+            legend.frame = BlockBorder.NONE
+            legend.itemLabelPadding = RectangleInsets(2.0, 5.0, 2.0, 5.0)
+            legend.legendItemGraphicPadding = RectangleInsets(0.0, 10.0, 0.0, 10.0)
+            legend.setHorizontalAlignment(HorizontalAlignment.LEFT)
+
+
+
+            chart.fireChartChanged()
+            // 输出为PNG图片
+
+            // 输出为PNG图片
+            var outputFile: FileOutputStream? = null
+            try {
+                outputFile = FileOutputStream("./data/YGOAssistant/piechart.png")
+                ChartUtils.writeChartAsPNG(outputFile, chart, 1080, 720)
+            } catch (e: IOException) {
+                e.printStackTrace()
+            }
+
+            return "{饼图}"
+        }
 
         if(arg.startsWith("添加tag ")||arg.startsWith("扣帽子 ")){
             val matchResult = Regex(""".*? ([\s\S]*) ([\s\S]*)""").find(arg)?:return "null"
@@ -1373,12 +1474,6 @@ class Command {
 
             return returnMessage
         }
-
-        if(arg == "卡查教程"){
-            return Config.help
-        }
-
-
         return "null"
     }
 

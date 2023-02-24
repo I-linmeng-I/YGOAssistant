@@ -37,21 +37,12 @@ object YGOAssisttant : KotlinPlugin(
         author("linmeng")
     }
 ) {
-
-    val command = Command()
-
-
     override fun onEnable() {
         logger.info { "YGO助手插件开始加载" }
 
         Config.reload()
         GroupScribtion.reload()
         PersonalSubscription.reload()
-        GroupPlayerTags.reload()
-
-        if(Config.help == ""){
-            Config.help = "https://github.com/I-linmeng-I/YGOAssistant/blob/master/README.md"
-        }
 
         logger.info{"配置与数据加载完毕"}
 
@@ -68,7 +59,7 @@ object YGOAssisttant : KotlinPlugin(
             }
         }
 
-        //消息处理类
+        val command = Command()//消息处理类
 
 
 
@@ -152,6 +143,11 @@ object YGOAssisttant : KotlinPlugin(
                         logger.info { "报错了，$e" }
                     }
 
+                }
+                else if (returnMessage.indexOf("{饼图}") > -1) {
+                    val file = File("./data/YGOAssistant/piechart.png")
+                    val inputStream = FileInputStream(file)
+                    subject.sendImage(inputStream)
                 }
                 else {
                     subject.sendMessage(returnMessage)
