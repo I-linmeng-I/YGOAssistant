@@ -20,7 +20,10 @@ import net.mamoe.mirai.utils.info
 import org.jfree.chart.ChartFactory
 import org.jfree.chart.ChartUtils
 import org.jfree.chart.block.BlockBorder
-import org.jfree.chart.date.SpreadsheetDate
+import org.jfree.chart.entity.ChartEntity
+import org.jfree.chart.entity.EntityCollection
+import org.jfree.chart.entity.PieSectionEntity
+import org.jfree.chart.entity.StandardEntityCollection
 import org.jfree.chart.labels.StandardPieSectionLabelGenerator
 import org.jfree.chart.plot.*
 import org.jfree.chart.ui.HorizontalAlignment
@@ -29,6 +32,10 @@ import org.jfree.chart.ui.RectangleInsets
 import org.jfree.data.general.DefaultPieDataset
 import org.jfree.data.general.PieDataset
 import java.awt.Font
+import java.awt.TexturePaint
+import java.awt.font.FontRenderContext
+import java.awt.geom.Rectangle2D
+import java.awt.image.BufferedImage
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
@@ -1301,7 +1308,7 @@ class Command {
             return "你还没登录，先去登录吧"
         }
 
-        if(arg == "测试"){
+        if(arg == "饼图"){
 
             var WebData = GetWebSourceCode("https://sapi.moecube.com:444/ygopro/analytics/deck/type?type=day&source=mycard-athletic")
 
@@ -1342,13 +1349,19 @@ class Command {
             )
 
             val plot = chart.plot as PiePlot<String>
-            val font = Font("宋体", Font.BOLD, 16)
-            plot.labelFont = Font("宋体", Font.BOLD, 12)
+            val font = Font("宋体", Font.BOLD, 18)
+            plot.labelFont = Font("宋体", Font.BOLD, 14)
+            chart.title.font = Font("宋体", Font.BOLD, 24)
 
             plot.labelBackgroundPaint = null
 
             var labelGenerator = StandardPieSectionLabelGenerator("{0} ({2})", Locale.CHINA)
             plot.labelGenerator = labelGenerator
+            plot.labelDistributor = PieLabelDistributor(1)
+
+            // Set the margin to zero so the chart fills the whole panel
+            plot.interiorGap = 0.0
+
 
             val legend = chart.legend
             legend.itemFont = font
@@ -1377,7 +1390,6 @@ class Command {
             legend.itemLabelPadding = RectangleInsets(2.0, 5.0, 2.0, 5.0)
             legend.legendItemGraphicPadding = RectangleInsets(0.0, 10.0, 0.0, 10.0)
             legend.setHorizontalAlignment(HorizontalAlignment.LEFT)
-
 
 
             chart.fireChartChanged()
