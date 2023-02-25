@@ -1341,7 +1341,7 @@ class Command {
 
             // 创建JFreeChart对象
             val chart = ChartFactory.createPieChart(
-                "萌卡前20使用率卡组饼图",  // 图表标题
+                "萌卡前25卡组使用率饼图",  // 图表标题
                 dataset,  // 数据集
                 true,  // 是否显示图例
                 true,  // 是否生成工具提示
@@ -1372,7 +1372,7 @@ class Command {
                     var label = super.generateSectionLabel(dataset, key)
                     for(i in 0..24){
                         if(label == resultMatch[i].groupValues[1]){
-                            val rate = ((resultMatch[i].groupValues[3].toFloat() + resultMatch[i].groupValues[5].toFloat())/
+                            val rate = ((resultMatch[i].groupValues[3].toFloat() + resultMatch[i].groupValues[6].toFloat())/
                                     (resultMatch[i].groupValues[3].toFloat() + resultMatch[i].groupValues[5].toFloat() +
                                         resultMatch[i].groupValues[4].toFloat() +resultMatch[i].groupValues[6].toFloat()))*100
                             label += " 使用数：" + resultMatch[i].groupValues[2] + " 综合胜率：" + "%.2f".format(rate) +"%"
