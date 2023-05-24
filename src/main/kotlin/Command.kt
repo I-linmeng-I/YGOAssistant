@@ -188,7 +188,7 @@ class Command {
         var numeric = true
 
         try {
-            val num = parseDouble(string)
+            parseDouble(string)
         } catch (e: NumberFormatException) {
             numeric = false
         }
@@ -233,7 +233,7 @@ class Command {
 
 
 
-
+    @net.mamoe.mirai.console.util.ConsoleExperimentalApi
     suspend fun LinkStart() {
 
         runCatching{
@@ -258,7 +258,7 @@ class Command {
         }
     }
 
-
+    @net.mamoe.mirai.console.util.ConsoleExperimentalApi
     private suspend fun restart(){
         duelList.clear()
         client = HttpClient(OkHttp) {
@@ -296,6 +296,7 @@ class Command {
         YGOAssisttant.logger.info { "重启成功" }
     }
 
+    @net.mamoe.mirai.console.util.ConsoleExperimentalApi
     private suspend fun Frame.Text.parse() {
 
 
@@ -458,7 +459,7 @@ class Command {
         val CardData2 = GetWebSourceCode("https://ygocdb.com/card/"+ResultMatch[cardNumber-1].groupValues[1])
 
         var avail = Regex("""<i class="(.*?)">""").find(CardData2).toString()
-        var availMatch = ""
+        var availMatch: String
         if(avail == "l0"){
             availMatch = "禁止卡"
         }
@@ -498,9 +499,7 @@ class Command {
         }
         outPutResult+="卡片ID："+ResultMatch[cardNumber-1].groupValues[1]
 
-        if(availMatch !=null){
-            outPutResult+= "\n禁限情况："+availMatch + "{分割多段}"
-        }
+        outPutResult+= "\n禁限情况："+availMatch + "{分割多段}"
 
         if(PEffect!=""){
             outPutResult+="灵摆效果："
@@ -680,6 +679,7 @@ class Command {
 
 
     //处理指令
+    @net.mamoe.mirai.console.util.ConsoleExperimentalApi
     suspend fun ProcessingCommand(arg: String,user:Contact,GroupID:Long):String{
 
         val userID = user.id
@@ -797,8 +797,7 @@ class Command {
             if(ResultMatch.isEmpty()){
                 return "没这人的记录，要么没打过竞技要么没这人"
             }
-            var  resultNumber = 1
-            var outputResults = ""
+
             val format = DecimalFormat("#.##")
             //舍弃规则，RoundingMode.FLOOR表示直接舍弃。
             format.roundingMode = RoundingMode.CEILING
@@ -810,7 +809,6 @@ class Command {
 
             var FTime = LocalDate.parse(ResultMatch[ResultMatch.size-1].groupValues[7], dateFormat)
 
-            var LTime = LocalDate.parse(ResultMatch[0].groupValues[7], dateFormat)
             var pageNum = 500
             var StartNum = 0
             var RecordSize = 0
@@ -867,14 +865,14 @@ class Command {
             }
 
             //分数变化
-            var StartDP = 0.0f
+            var StartDP: Float
             if(ResultMatch[RecordSize].groupValues[1] == playerToCheck){
                 StartDP = ResultMatch[RecordSize].groupValues[5].toFloat()
             }
             else{
                 StartDP = ResultMatch[RecordSize].groupValues[6].toFloat()
             }
-            var EndDP = 0.0f
+            var EndDP: Float
             if(ResultMatch[StartNum].groupValues[1] == playerToCheck){
                 EndDP = ResultMatch[StartNum].groupValues[3].toFloat()
             }
@@ -1270,7 +1268,7 @@ class Command {
                 //返回单卡数据
                 return SearchCard(IsInUserList.UserSearchContent,(IsInUserList.UserSearchPage-1)*10,IsInUserList.UserSearchCard,"日文调整") +
                         "\n" +
-                        return SearchCard(IsInUserList.UserSearchContent,(IsInUserList.UserSearchPage-1)*10,IsInUserList.UserSearchCard,"日文faq")
+                        SearchCard(IsInUserList.UserSearchContent,(IsInUserList.UserSearchPage-1)*10,IsInUserList.UserSearchCard,"日文faq")
             }
         }
 
@@ -1428,7 +1426,6 @@ class Command {
             val resultMatch = Regex(""""name":"(.*?)","recent_time":".*?count":"(.*?)",".*?,"win":"(.*?)","draw":".*?","lose":"(.*?)"},.*?"win":"(.*?)","draw":".*?","lose":"(.*?)"""").
             findAll(WebData).toList()
 
-            var returnMsg = ""
 
             val dataset = DefaultPieDataset<String>()
 
@@ -1509,7 +1506,7 @@ class Command {
             // 输出为PNG图片
 
             // 输出为PNG图片
-            var outputFile: FileOutputStream? = null
+            var outputFile: FileOutputStream?
             try {
                 outputFile = FileOutputStream("./data/YGOAssistant/piechart.png")
                 ChartUtils.writeChartAsPNG(outputFile, chart, 1080, 720)
@@ -1531,7 +1528,7 @@ class Command {
             //val filePath = "a.txt"
             //File(filePath).appendText(WebData.toString())
 
-            val  DPMatch = Regex("""pt":(\d*?),"entertain_win""").find(WebData)?:return "没这人"
+            Regex("""pt":(\d*?),"entertain_win""").find(WebData)?:return "没这人"
 
 
 
