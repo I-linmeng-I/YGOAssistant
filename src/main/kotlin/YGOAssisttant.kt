@@ -63,7 +63,7 @@ object YGOAssisttant : KotlinPlugin(
 
 
 
-        var returnMessage: String = "null"
+        var returnMessage: String
 
         globalEventChannel().subscribeAlways<MessageEvent> {
             if(subject === sender){
@@ -107,8 +107,6 @@ object YGOAssisttant : KotlinPlugin(
                     val nodes = mutableListOf<ForwardMessage.Node>()
 
                     val message = returnMessage.split("{forwardmessage的分割符}")
-
-                    val preview = mutableListOf<String>("这里是ygo插件查询的返回结果", "如果需要寻找更多请用相关指令")
 
 
                     message.forEach {
@@ -171,7 +169,6 @@ object YGOAssisttant : KotlinPlugin(
             return path+filePath
         }
 
-        val startTime = System.currentTimeMillis()
         val url = URL(uri)
         val conn: HttpURLConnection = url.openConnection() as HttpURLConnection
         conn.setRequestProperty("referer", "") //这是破解防盗链添加的参数
@@ -193,7 +190,7 @@ object YGOAssisttant : KotlinPlugin(
         if (!file1.exists()) {
             val fos = FileOutputStream(File(path+filePath))
             val buffer = ByteArray(102400)
-            var len = 0
+            var len:Int
             while (inStream.read(buffer).also { len = it } != -1) {
                 fos.write(buffer, 0, len)
             }

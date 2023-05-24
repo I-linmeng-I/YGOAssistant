@@ -848,21 +848,18 @@ class Command {
 
             }
 
-            //胜率
+            //胜率and打卡情况
+            var FirstWinNum = 0
             var winNum =0
             for(i in StartNum..RecordSize){
                 if(ResultMatch[i].groupValues[11]==playerToCheck){
                     winNum++
+                    if(ResultMatch[i].groupValues[12]=="true"){
+                        FirstWinNum++
+                    }
                 }
             }
 
-            //打卡情况
-            var FirstWinNum = 0
-            for(i in StartNum..RecordSize){
-                if(ResultMatch[i].groupValues[12]=="true"){
-                    FirstWinNum++
-                }
-            }
 
             //分数变化
             var StartDP: Float
