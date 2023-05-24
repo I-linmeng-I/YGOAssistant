@@ -49,6 +49,8 @@ import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import java.util.*
 import javax.imageio.ImageIO
+import java.time.LocalDate
+import kotlin.math.roundToInt
 
 
 class LoginCredentialException : HttpStatusCodeException(HttpStatusCode.BadRequest)
@@ -775,6 +777,117 @@ class Command {
             outputResults += playerToCheck+ "的MC对战历史"
 
             return outputResults
+        }
+
+        if(arg.contains("月历史 ")){
+            val matchResult = Regex("""(\d*)月历史 ([\s\S]*)""").find(arg)?:return "null"
+            val calendar = Calendar.getInstance()
+            val currentYear = calendar.get(Calendar.YEAR)
+            val currentMonth = calendar.get(Calendar.MONTH) + 1
+            val TargetMonth = matchResult.groupValues[1].toInt()
+            if(TargetMonth>currentMonth ||TargetMonth<0){
+                return "请正确输入月份"
+            }
+            val playerToCheck = matchResult.groupValues[2]
+            val playerNameInURL = URLEncoder.encode( playerToCheck,"UTF-8")
+
+            //获取网页数据
+            var WebData = GetWebSourceCode("https://sapi.moecube.com:444/ygopro/arena/history?username=${playerNameInURL}&type=1&page_num=500")
+            var  ResultMatch = Regex(""""usernamea":"(.*?)","usernameb":"(.*?)","[\s\S]*?"pta":(.*?),"ptb":(.*?),"pta_ex":(.*?),"ptb_ex":(.*?),"[\s\S]*?"start_time":"(.*?)T(.*?).000Z","end_time":"(.*?)T(.*?).000Z","winner":"(.*?)","isfirstwin":(.*?),""").findAll(WebData).toList()
+            if(ResultMatch.isEmpty()){
+                return "没这人的记录，要么没打过竞技要么没这人"
+            }
+            var  resultNumber = 1
+            var outputResults = ""
+            val format = DecimalFormat("#.##")
+            //舍弃规则，RoundingMode.FLOOR表示直接舍弃。
+            format.roundingMode = RoundingMode.CEILING
+
+
+            //时间
+
+            var dateFormat =  DateTimeFormatter.ofPattern("yyyy-MM-dd")
+
+            var FTime = LocalDate.parse(ResultMatch[ResultMatch.size-1].groupValues[7], dateFormat)
+
+            var LTime = LocalDate.parse(ResultMatch[0].groupValues[7], dateFormat)
+            var pageNum = 500
+            var StartNum = 0
+            var RecordSize = 0
+            logger.info(TargetMonth.toString())
+            logger.info(FTime.toString())
+            while (FTime.year == currentYear && FTime.monthValue >= TargetMonth){
+                WebData = GetWebSourceCode("https://sapi.moecube.com:444/ygopro/arena/history?username=${playerNameInURL}&type=1&page_num=" + pageNum)
+                ResultMatch = Regex(""""usernamea":"(.*?)","usernameb":"(.*?)","[\s\S]*?"pta":(.*?),"ptb":(.*?),"pta_ex":(.*?),"ptb_ex":(.*?),"[\s\S]*?"start_time":"(.*?)T(.*?).000Z","end_time":"(.*?)T(.*?).000Z","winner":"(.*?)","isfirstwin":(.*?),""").findAll(WebData).toList()
+                if(ResultMatch.size<pageNum-1){
+                    break
+                }
+                FTime = LocalDate.parse(ResultMatch[ResultMatch.size-1].groupValues[7], dateFormat)
+                logger.info(FTime.toString())
+                if(pageNum >= 10000){
+                    return "报错：超出页数极限"
+                }
+                pageNum += 500
+            }
+            for(i in ResultMatch.size-1 downTo 0){
+                if(LocalDate.parse(ResultMatch[i].groupValues[7], dateFormat).monthValue == TargetMonth && currentYear == LocalDate.parse(ResultMatch[i].groupValues[7], dateFormat).year){
+                    RecordSize = i
+                    break
+                }
+
+            }
+
+            logger.info(RecordSize.toString())
+
+            if (RecordSize == 0 ){
+                return "没有记录"
+            }
+            for(i in RecordSize downTo 0){
+                if(LocalDate.parse(ResultMatch[i].groupValues[7], dateFormat).monthValue > TargetMonth){
+                    StartNum = i+1
+                    break
+                }
+
+            }
+
+            //胜率
+            var winNum =0
+            for(i in StartNum..RecordSize){
+                if(ResultMatch[i].groupValues[11]==playerToCheck){
+                    winNum++
+                }
+            }
+
+            //打卡情况
+            var FirstWinNum = 0
+            for(i in StartNum..RecordSize){
+                if(ResultMatch[i].groupValues[12]=="true"){
+                    FirstWinNum++
+                }
+            }
+
+            //分数变化
+            var StartDP = 0.0f
+            if(ResultMatch[RecordSize].groupValues[1] == playerToCheck){
+                StartDP = ResultMatch[RecordSize].groupValues[5].toFloat()
+            }
+            else{
+                StartDP = ResultMatch[RecordSize].groupValues[6].toFloat()
+            }
+            var EndDP = 0.0f
+            if(ResultMatch[StartNum].groupValues[1] == playerToCheck){
+                EndDP = ResultMatch[StartNum].groupValues[3].toFloat()
+            }
+            else{
+                EndDP = ResultMatch[StartNum].groupValues[4].toFloat()
+            }
+
+
+            //String.format("%02d", date.monthValue)
+            logger.info("当前月份: $currentMonth" + "当前年份: $currentYear")
+            return "玩家："+playerToCheck +"\n"+ TargetMonth+"月场次：" + (RecordSize+1-StartNum).toString() +"\n" + "打卡情况：" + FirstWinNum.toString() + "\n"+ TargetMonth+"月胜率：" +"%.2f".format((winNum.toFloat()/(RecordSize+1-StartNum).toFloat())*100)+"%"+"\n" + "月初分数：" + StartDP.toInt() + "||" + "月末分数：" + EndDP.toInt() + "\n"+ "分数变化：" + (EndDP - StartDP).toInt()
+            //"||"+LTime.year.toString()+ "||" +LTime.monthValue.toString() + "||" + "当前月份: $currentMonth" + "当前年份: $currentYear")
+
         }
 
         if(arg.startsWith("对战列表")){
