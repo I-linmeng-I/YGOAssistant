@@ -81,28 +81,32 @@ object YGOAssisttant : KotlinPlugin(
 
                     val updateImage = FileInputStream(
                         httpRequest(
-                            "https://cdn.233.momobako.com/ygopro/pics/${message[1]}.jpg!half",
+                            "https://cdn.233.momobako.com/ygopro/pics/${message[1]}.jpg",
                             message[1]
                         )
                     )
 
                     //val imageId: String = updateImage.uploadAsImage(subject).imageId
 
-                    if (returnMessage.indexOf("{分割多段}") > -1) {
-                        val message1 = message[0].split("{分割多段}")
-                        message1.forEach{
-                            subject.sendMessage(it)
-                        }
-                        subject.sendImage(updateImage)
-                    }
-                    else{
-                        subject.sendMessage(message[0])
-                        subject.sendImage(updateImage)
-                    }
-
-
+//                    if (returnMessage.indexOf("{分割多段}") > -1) {
+//                        val message1 = message[0].split("{分割多段}")
+//                        message1.forEach{
+//                            subject.sendMessage(it)
+//                        }
+//                        subject.sendImage(updateImage)
+//                    }
+//                    else{
+//                        subject.sendMessage(message[0])
+//                        subject.sendImage(updateImage)
+//                    }
+//                    subject.sendMessage(message[0])
+//                    subject.sendImage(updateImage)
+                    val imgFile = updateImage.uploadAsImage(subject)
+                    subject.sendMessage(PlainText(message[0])+imgFile)
                 }
                 else if (returnMessage.indexOf("{forwardmessage的分割符}") > -1) {
+
+//                    subject.sendMessage(returnMessage)
 
                     val nodes = mutableListOf<ForwardMessage.Node>()
 
@@ -110,14 +114,29 @@ object YGOAssisttant : KotlinPlugin(
 
 
                     message.forEach {
+                        val message = it.split("{forwardmessage的图片}:")
+
+                        var tempMessage = PlainText(message[0]).plus("\n")
+
+
+                        if(message.size>1){
+                            val updateImage = FileInputStream(
+                                httpRequest(
+                                    "https://cdn.233.momobako.com/ygopro/pics/${message[1]}.jpg",
+                                    message[1]
+                                )
+                            )
+//                            subject.sendMessage(message.size.toString())
+                            val imgFile = updateImage.uploadAsImage(subject)
+                            tempMessage += imgFile
+                        }
+//                        subject.sendMessage(PlainText(message[0])+imgFile)
                         nodes.add(
                             ForwardMessage.Node(
                                 bot.id,
                                 time = -System.currentTimeMillis().toInt(),
                                 bot.nameCardOrNick,
-                                buildMessageChain {
-                                    +it
-                                }
+                                message = tempMessage
                             )
                         )
                     }

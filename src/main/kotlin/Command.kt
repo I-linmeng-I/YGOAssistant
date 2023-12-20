@@ -490,6 +490,7 @@ class Command {
         var outPutResult=""
         outPutResult += "中文名："+ ResultMatch[cardNumber-1].groupValues[2]+"\n日文名："+cardJapaness+"\n类型："
 
+
         val monsterMatch = Regex("""(.*?)<br>(.*)""").find(ResultMatch[cardNumber-1].groupValues[3])
         if(monsterMatch == null){
             outPutResult+=ResultMatch[cardNumber-1].groupValues[3]+"\n"
@@ -499,7 +500,7 @@ class Command {
         }
         outPutResult+="卡片ID："+ResultMatch[cardNumber-1].groupValues[1]
 
-        outPutResult+= "\n禁限情况："+availMatch + "{分割多段}"
+        outPutResult+= "\n禁限情况："+availMatch //+ "{分割多段}"
 
         if(PEffect!=""){
             outPutResult+="灵摆效果："
@@ -533,7 +534,9 @@ class Command {
             }
         }
 
-        return outPutResult+"{加入图片}：url：${ResultMatch[cardNumber-1].groupValues[1]}"
+        outPutResult += "{加入图片}：url：${ResultMatch[cardNumber-1].groupValues[1]}"
+
+        return outPutResult
     }
 
     //哎，不写了，反正啊，该看不懂还是看不懂，写那么多都是放屁
@@ -618,6 +621,11 @@ class Command {
         return returnMsg
     }
 
+    //查卡片价格
+    fun SearchCardPrices(cardName: String):String{
+        return ""
+    }
+
     //查卡列表
     fun SearchCard(cardToSearch:String,page:Int,cardNumber:Int,additionalInfo:String):String{
         //查卡
@@ -628,7 +636,7 @@ class Command {
 
         var WebData = GetWebSourceCode("https://ygocdb.com/more?search=$cardToSearchInURL&start=$page")
 
-
+        val cardIdresultMatch = Regex("""<h3><span>(\d*)</span>&nbsp;""").findAll(WebData).toList()
 
         val  resultMatch = Regex("""<h3><span>(\d*?)</span>&nbsp;[\s\S]*?<strong class="name"><span>(.*?)</span><br></strong>.*\s.*\s*(.*)""").findAll(WebData).toList()
 
@@ -643,6 +651,10 @@ class Command {
         if(cardNumber!=0){
             //如果有特殊指令
             if(additionalInfo != ""){
+                //屎山遗留，加个if来判断是不是查卡片价格
+                if(additionalInfo == "查价格"){
+                    return SearchCardPrices(resultMatch[cardNumber-1].groupValues[2])
+                }
                 return AdditionalCommandProcess(resultMatch[cardNumber-1].groupValues[1],additionalInfo)
             }
             return SearchCardInfo(resultMatch,cardNumber)
@@ -664,11 +676,14 @@ class Command {
 
             val monsterMatch = Regex("""(.*?)<br>(.*)""").find(it.groupValues[3])
             if(monsterMatch == null){
-                outPutResult+=it.groupValues[3]+"\n"
+                outPutResult+=it.groupValues[3]
             }
             else{
-                outPutResult +=monsterMatch.groupValues[1]+"\n身板："+ monsterMatch.groupValues[2]+"\n"
+                outPutResult +=monsterMatch.groupValues[1]+"\n身板："+ monsterMatch.groupValues[2]
             }
+            outPutResult += "\n卡片密码："+ cardIdresultMatch[resultNumber-1].groupValues[1]
+
+            outPutResult += "{forwardmessage的图片}:"+cardIdresultMatch[resultNumber-1].groupValues[1]
 
             outPutResult += "{forwardmessage的分割符}"
 
@@ -677,12 +692,17 @@ class Command {
         return outPutResult
     }
 
+    //查询卡牌价格
+    fun SearchPrices(cardNameJpn:String):String{
+        return("")
+    }
 
     //处理指令
     @net.mamoe.mirai.console.util.ConsoleExperimentalApi
     suspend fun ProcessingCommand(arg: String,user:Contact,GroupID:Long):String{
 
         val userID = user.id
+        var isconnection = true
 
         //MC相关
         //查分
@@ -974,11 +994,13 @@ class Command {
                 returnMsg += "\n排名："+duelList[i].player2Rank+"  胜率："+duelList[i].player2Ratio+"%"
 
                 if(duelList[i].StartTime!="-1"){
-                    returnMsg +="\n对局已过去时间："+CalculateTime(duelList[i].StartTime,formatted)+"\n"
+                    returnMsg +="\n对局已过去时间："+CalculateTime(duelList[i].StartTime,formatted)
                 }
                 else{
-                    returnMsg += "\n对局已过去时间：未知\n"
+                    returnMsg += "\n对局已过去时间：未知"
                 }
+
+                //是否增加对战房间密码
                 if(token != ""){
                     returnMsg += "\n对战房间密码:"+token+duelList[i].id  +"{forwardmessage的分割符}"
                 }
@@ -1016,9 +1038,23 @@ class Command {
         if(arg == "开始连接"){
             val index = Config.admin.indexOfFirst { it ==  userID}
             if (index == -1) return "你不是管理员，关于如何添加管理员。可以去GitHub上看readme"
-
-            duelList.clear()
-            LinkStart()
+            isconnection = true
+            while (isconnection) {
+                duelList.clear()
+                LinkStart()
+                Thread.sleep(3000)
+                client.close()
+                client = HttpClient(OkHttp) {
+                    BrowserUserAgent()
+                    install(WebSockets) {
+                        pingInterval = 1000
+                    }
+                    install(HttpTimeout) {
+                        socketTimeoutMillis = 1000
+                    }
+                }
+                Thread.sleep(3000)
+            }
 
             return "在连了"
         }
@@ -1026,16 +1062,7 @@ class Command {
         if(arg == "关闭连接"){
             val index = Config.admin.indexOfFirst { it ==  userID}
             if (index == -1) return "你不是管理员，关于如何添加管理员。可以去GitHub上看readme"
-            client.close()
-            client = HttpClient(OkHttp) {
-                BrowserUserAgent()
-                install(WebSockets) {
-                    pingInterval = 1000
-                }
-                install(HttpTimeout) {
-                    socketTimeoutMillis = 1000
-                }
-            }
+            isconnection = false
             return "关了,离开了，不要爱了"
         }
 
@@ -1219,7 +1246,7 @@ class Command {
             }
         }
 
-        if(arg == "md收录"){
+        if(arg == "收录情况"){
             val IsInUserList = UpdateUserList(userID)//获得用户数据
 
             //不存在则返回
@@ -1231,23 +1258,43 @@ class Command {
                 //修改用户数据并添加到列表
                 UserSearchDataList.add(IsInUserList)
                 //返回单卡数据
-                return SearchCard(IsInUserList.UserSearchContent,(IsInUserList.UserSearchPage-1)*10,IsInUserList.UserSearchCard,"md卡包")
+                return SearchCard(IsInUserList.UserSearchContent,(IsInUserList.UserSearchPage-1)*10,IsInUserList.UserSearchCard,"md卡包") + "\n" +
+                        SearchCard(IsInUserList.UserSearchContent,(IsInUserList.UserSearchPage-1)*10,IsInUserList.UserSearchCard,"ocg收录")
             }
         }
 
-        if(arg == "ocg收录"){
-            val IsInUserList = UpdateUserList(userID)//获得用户数据
+        if(arg.startsWith("收录情况 ")){
+            val matchResult = Regex("""收录情况 (\d*)""").find(arg)?:return "null"
+            val cardNumber = matchResult.groupValues[1]
 
-            //不存在则返回
-            if(IsInUserList.UserSearchContent == ""){
-                return "null"
-            }
-            else if(IsInUserList.UserSearchProcess.toInt() == 1)//如果是在单卡查询里了
-            {
-                //修改用户数据并添加到列表
-                UserSearchDataList.add(IsInUserList)
-                //返回单卡数据
-                return SearchCard(IsInUserList.UserSearchContent,(IsInUserList.UserSearchPage-1)*10,IsInUserList.UserSearchCard,"ocg收录")
+            if(cardNumber.toInt()<11){
+                val IsInUserList = UpdateUserList(userID)//获得用户数据
+
+                //不存在则返回
+                if(IsInUserList.UserSearchContent == ""){
+                    return "null"
+                }
+                else if(IsInUserList.UserSearchProcess.toInt() == 1)//如果是在单卡查询里了
+                {
+                    //修改用户数据并添加到列表
+                    IsInUserList.UserSearchCard = cardNumber.toInt()
+                    IsInUserList.UserSearchProcess = 0
+                    UserSearchDataList.add(IsInUserList)
+                    //返回单卡数据
+                    return SearchCard(IsInUserList.UserSearchContent,(IsInUserList.UserSearchPage-1)*10,IsInUserList.UserSearchCard,"md卡包") + "\n" +
+                            SearchCard(IsInUserList.UserSearchContent,(IsInUserList.UserSearchPage-1)*10,IsInUserList.UserSearchCard,"ocg收录")
+                }
+                else//翻页//翻页
+                {
+                    //修改用户数据并添加到列表
+                    IsInUserList.UserSearchCard = cardNumber.toInt()
+                    IsInUserList.UserSearchProcess = 0
+                    UserSearchDataList.add(IsInUserList)
+                    //返回单卡数据
+                    return SearchCard(IsInUserList.UserSearchContent,(IsInUserList.UserSearchPage-1)*10,IsInUserList.UserSearchCard,"md卡包") + "\n" +
+                            SearchCard(IsInUserList.UserSearchContent,(IsInUserList.UserSearchPage-1)*10,IsInUserList.UserSearchCard,"ocg收录")
+                }
+
             }
         }
 
@@ -1258,18 +1305,53 @@ class Command {
             if(IsInUserList.UserSearchContent == ""){
                 return "null"
             }
-            else if(IsInUserList.UserSearchProcess.toInt() == 1)//如果是在单卡查询里了
+            else
             {
                 //修改用户数据并添加到列表
                 UserSearchDataList.add(IsInUserList)
                 //返回单卡数据
                 return SearchCard(IsInUserList.UserSearchContent,(IsInUserList.UserSearchPage-1)*10,IsInUserList.UserSearchCard,"日文调整") +
-                        "\n" +
+                        "{forwardmessage的分割符}" +
                         SearchCard(IsInUserList.UserSearchContent,(IsInUserList.UserSearchPage-1)*10,IsInUserList.UserSearchCard,"日文faq")
             }
         }
 
+        if(arg.startsWith("卡片调整 ")){
+            val matchResult = Regex("""卡片调整 (\d*)""").find(arg)?:return "null"
+            val cardNumber = matchResult.groupValues[1]
 
+            if(cardNumber.toInt()<11){
+                val IsInUserList = UpdateUserList(userID)//获得用户数据
+
+                //不存在则返回
+                if(IsInUserList.UserSearchContent == ""){
+                    return "null"
+                }
+                else if(IsInUserList.UserSearchProcess.toInt() == 1)//如果是在单卡查询里了
+                {
+                    //修改用户数据并添加到列表
+                    IsInUserList.UserSearchCard = cardNumber.toInt()
+                    IsInUserList.UserSearchProcess = 0
+                    UserSearchDataList.add(IsInUserList)
+                    //返回单卡数据
+                    return SearchCard(IsInUserList.UserSearchContent,(IsInUserList.UserSearchPage-1)*10,IsInUserList.UserSearchCard,"日文调整") +
+                            "{forwardmessage的分割符}" +
+                            SearchCard(IsInUserList.UserSearchContent,(IsInUserList.UserSearchPage-1)*10,IsInUserList.UserSearchCard,"日文faq")
+                }
+                else//翻页//翻页
+                {
+                    //修改用户数据并添加到列表
+                    IsInUserList.UserSearchCard = cardNumber.toInt()
+                    IsInUserList.UserSearchProcess = 0
+                    UserSearchDataList.add(IsInUserList)
+                    //返回单卡数据
+                    return SearchCard(IsInUserList.UserSearchContent,(IsInUserList.UserSearchPage-1)*10,IsInUserList.UserSearchCard,"日文调整") +
+                            "{forwardmessage的分割符}" +
+                            SearchCard(IsInUserList.UserSearchContent,(IsInUserList.UserSearchPage-1)*10,IsInUserList.UserSearchCard,"日文faq")
+                }
+
+            }
+        }
 
 
         //机器人相关指令
