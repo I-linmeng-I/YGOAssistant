@@ -25,6 +25,9 @@ import java.io.FileOutputStream
 import java.io.InputStream
 import java.net.HttpURLConnection
 import java.net.URL
+import net.mamoe.mirai.utils.ExternalResource.Companion.toExternalResource
+import java.io.ByteArrayInputStream
+import java.util.regex.Pattern
 
 
 @OptIn(ConsoleExperimentalApi::class, ExperimentalCommandDescriptors::class)
@@ -81,7 +84,7 @@ object YGOAssisttant : KotlinPlugin(
 
                     val updateImage = FileInputStream(
                         httpRequest(
-                            "https://cdn.233.momobako.com/ygopro/pics/${message[1]}.jpg",
+                            "https://cdn.233.momobako.com/ygopro/pics/${message[1]}.jpg!half",
                             message[1]
                         )
                     )
@@ -114,31 +117,53 @@ object YGOAssisttant : KotlinPlugin(
 
 
                     message.forEach {
-                        val message = it.split("{forwardmessage的图片}:")
+                        //如果有卡查列表的图片（别问，问就是屎山代码的锅）
+                        if(it.indexOf("{forwardmessage的图片}:")>-1){
+                            val message = it.split("{forwardmessage的图片}:")
 
-                        var tempMessage = PlainText(message[0]).plus("\n")
+                            var tempMessage = PlainText(message[0]).plus("\n")
 
 
-                        if(message.size>1){
-                            val updateImage = FileInputStream(
-                                httpRequest(
-                                    "https://cdn.233.momobako.com/ygopro/pics/${message[1]}.jpg",
-                                    message[1]
+                            if(message.size>1){
+                                val updateImage = FileInputStream(
+                                    httpRequest(
+                                        "https://cdn.233.momobako.com/ygopro/pics/${message[1]}.jpg!half",
+                                        message[1]
+                                    )
+                                )
+//                            subject.sendMessage(message.size.toString())
+                                val imgFile = updateImage.uploadAsImage(subject)
+                                tempMessage += imgFile
+                            }
+//                        subject.sendMessage(PlainText(message[0])+imgFile)
+                            nodes.add(
+                                ForwardMessage.Node(
+                                    bot.id,
+                                    time = -System.currentTimeMillis().toInt(),
+                                    bot.nameCardOrNick,
+                                    message = tempMessage
                                 )
                             )
-//                            subject.sendMessage(message.size.toString())
-                            val imgFile = updateImage.uploadAsImage(subject)
-                            tempMessage += imgFile
                         }
+                        else{
+                            val message = it.split("{价格查询的图片}:")
+
+                            var tempMessage = PlainText(message[0]).plus("\n")
+
+
+                            if(message.size>1){
+                                tempMessage += message[1]
+                            }
 //                        subject.sendMessage(PlainText(message[0])+imgFile)
-                        nodes.add(
-                            ForwardMessage.Node(
-                                bot.id,
-                                time = -System.currentTimeMillis().toInt(),
-                                bot.nameCardOrNick,
-                                message = tempMessage
+                            nodes.add(
+                                ForwardMessage.Node(
+                                    bot.id,
+                                    time = -System.currentTimeMillis().toInt(),
+                                    bot.nameCardOrNick,
+                                    message = tempMessage
+                                )
                             )
-                        )
+                        }
                     }
 
                     nodes.removeAt(nodes.size-1)

@@ -39,8 +39,10 @@ import java.awt.image.BufferedImage
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
+import java.io.StringReader
 import java.lang.Double.parseDouble
 import java.math.RoundingMode
+import java.net.HttpURLConnection
 import java.net.URL
 import java.net.URLEncoder
 import java.text.DecimalFormat
@@ -296,6 +298,7 @@ class Command {
         YGOAssisttant.logger.info { "重启成功" }
     }
 
+    //获得萌卡房间相关
     @net.mamoe.mirai.console.util.ConsoleExperimentalApi
     private suspend fun Frame.Text.parse() {
 
@@ -623,7 +626,88 @@ class Command {
 
     //查卡片价格
     fun SearchCardPrices(cardName: String):String{
-        return ""
+        val cardToSearchName = URLEncoder.encode( cardName,"UTF-8")
+        var WebData = GetWebSourceCode("https://api.jihuanshe.com/api/market/search/match-product?keyword=${cardToSearchName}&game_key=ygo&game_sub_key=ocg&page=1&type=card_version&token=") // 替换为你要请求的 URL
+
+        val pageNumber = Regex(""""last_page":(.*?),"next_page_url":""").findAll(WebData).toList()[0].groupValues[1].toInt()
+
+
+        val resultMatch = mutableListOf<MatchResult>()
+        //获得所有的resultMatch
+        repeat(pageNumber) {
+            // 执行循环中的操作
+            var WebData = GetWebSourceCode("https://api.jihuanshe.com/api/market/search/match-product?keyword=${cardToSearchName}&game_key=ygo&game_sub_key=ocg&page=${it+1}&token=") // 替换为你要请求的 URL
+            //先匹配出数量
+            resultMatch.addAll(Regex(""""name_cn":"(.*?)","name_origin":"(.*?)"[\s\S]*?"card_id":(.*?),"number":"(.*?)","rarity":"(.*?)","image_url":"(.*?)","min_price":(.*?),"grade"""").findAll(WebData).toList())
+
+        }
+
+        if(resultMatch.isEmpty()){
+            return "没有找到相关的东西"
+        }
+
+        var returnMessage = ""
+
+        resultMatch.forEach {
+            //卡片名字
+            var cardNameA =it.groupValues[1]
+            val properties = Properties()
+            properties.load(StringReader("unicodeString=$cardNameA"))
+
+            cardNameA = properties.getProperty("unicodeString")
+
+
+            //卡片名字
+            var cardNameB = it.groupValues[2]
+
+            val propertiesB = Properties()
+            propertiesB.load(StringReader("unicodeString=$cardNameB"))
+
+            cardNameB = propertiesB.getProperty("unicodeString")
+
+
+            //所属卡包
+            var cardPack = it.groupValues[4]
+            val cardPackproperties = Properties()
+            cardPackproperties.load(StringReader("unicodeString=$cardPack"))
+
+            cardPack = cardPackproperties.getProperty("unicodeString")
+
+
+            var rarity = it.groupValues[5]
+            val rarityproperties = Properties()
+            rarityproperties.load(StringReader("unicodeString=$rarity"))
+
+            rarity = rarityproperties.getProperty("unicodeString")
+
+            var lowestPrice = it.groupValues[7].replace("\"", "")
+            //处理空价格
+            if(lowestPrice == "null"){
+                lowestPrice = "无成交价格"
+            }
+
+            var kardPicture = it.groupValues[6].replace("\"", "")
+//            //非同名卡片（部分重叠）
+//            if (cardNameA == cardName|| cardNameB == cardName){
+//                //剔除RD卡片
+//                if(cardPack.indexOf("RD\\/")> -1){
+//                    returnMessage += "卡名：" + cardName + "    最低价格：" + it.groupValues[6] + "\n卡包：" + it.groupValues[3] + " 罕贵度：" + it.groupValues[4] + " Grade:" + it.groupValues[7] + "{forwardmessage的分割符}"
+//                }
+//            }
+            if(cardPack.indexOf("RD/")==-1){
+                if (cardNameA == cardName|| cardNameB == cardName){
+                    returnMessage += "卡名:" + cardName + "    最低价格:" + lowestPrice + "\n卡片编号:" + cardPack + "    罕贵度:" + rarity +"{价格查询的图片}:"+kardPicture +"{forwardmessage的分割符}"
+                }
+            }
+        }
+
+        return returnMessage +"集换社价格"
+
+//        // 卡名对不对,和是不是rd的卡
+//        if(resultMatch){
+//
+//        }
+
     }
 
     //查卡列表
@@ -689,13 +773,11 @@ class Command {
 
             resultNumber++
         }
-        return outPutResult
+        return outPutResult + "卡片列表"
     }
 
-    //查询卡牌价格
-    fun SearchPrices(cardNameJpn:String):String{
-        return("")
-    }
+
+
 
     //处理指令
     @net.mamoe.mirai.console.util.ConsoleExperimentalApi
@@ -1246,7 +1328,7 @@ class Command {
             }
         }
 
-        if(arg == "收录情况"){
+        if(arg == "卡片收录"){
             val IsInUserList = UpdateUserList(userID)//获得用户数据
 
             //不存在则返回
@@ -1263,8 +1345,8 @@ class Command {
             }
         }
 
-        if(arg.startsWith("收录情况 ")){
-            val matchResult = Regex("""收录情况 (\d*)""").find(arg)?:return "null"
+        if(arg.startsWith("卡片收录 ")){
+            val matchResult = Regex("""卡片收录 (\d*)""").find(arg)?:return "null"
             val cardNumber = matchResult.groupValues[1]
 
             if(cardNumber.toInt()<11){
@@ -1348,6 +1430,55 @@ class Command {
                     return SearchCard(IsInUserList.UserSearchContent,(IsInUserList.UserSearchPage-1)*10,IsInUserList.UserSearchCard,"日文调整") +
                             "{forwardmessage的分割符}" +
                             SearchCard(IsInUserList.UserSearchContent,(IsInUserList.UserSearchPage-1)*10,IsInUserList.UserSearchCard,"日文faq")
+                }
+
+            }
+        }
+
+        if(arg == "卡片价格"){
+            val IsInUserList = UpdateUserList(userID)//获得用户数据
+
+            //不存在则返回
+            if(IsInUserList.UserSearchContent == ""){
+                return "null"
+            }
+            else
+            {
+                //修改用户数据并添加到列表
+                UserSearchDataList.add(IsInUserList)
+                //返回单卡数据
+                return SearchCard(IsInUserList.UserSearchContent,(IsInUserList.UserSearchPage-1)*10,IsInUserList.UserSearchCard,"查价格")
+            }
+        }
+
+        if(arg.startsWith("卡片价格 ")){
+            val matchResult = Regex("""卡片价格 (\d*)""").find(arg)?:return "null"
+            val cardNumber = matchResult.groupValues[1]
+
+            if(cardNumber.toInt()<11){
+                val IsInUserList = UpdateUserList(userID)//获得用户数据
+
+                //不存在则返回
+                if(IsInUserList.UserSearchContent == ""){
+                    return "null"
+                }
+                else if(IsInUserList.UserSearchProcess.toInt() == 1)//如果是在单卡查询里了
+                {
+                    //修改用户数据并添加到列表
+                    IsInUserList.UserSearchCard = cardNumber.toInt()
+                    IsInUserList.UserSearchProcess = 0
+                    UserSearchDataList.add(IsInUserList)
+                    //返回单卡数据
+                    return SearchCard(IsInUserList.UserSearchContent,(IsInUserList.UserSearchPage-1)*10,IsInUserList.UserSearchCard,"查价格")
+                }
+                else//翻页//翻页
+                {
+                    //修改用户数据并添加到列表
+                    IsInUserList.UserSearchCard = cardNumber.toInt()
+                    IsInUserList.UserSearchProcess = 0
+                    UserSearchDataList.add(IsInUserList)
+                    //返回单卡数据
+                    return SearchCard(IsInUserList.UserSearchContent,(IsInUserList.UserSearchPage-1)*10,IsInUserList.UserSearchCard,"查价格")
                 }
 
             }
