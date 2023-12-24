@@ -503,7 +503,7 @@ class Command {
         }
         outPutResult+="卡片ID："+ResultMatch[cardNumber-1].groupValues[1]
 
-        outPutResult+= "\n禁限情况："+availMatch //+ "{分割多段}"
+        outPutResult+= "\n禁限情况："+availMatch + "\n" //+ "{分割多段}"
 
         if(PEffect!=""){
             outPutResult+="灵摆效果："
