@@ -686,7 +686,7 @@ class Command {
                 lowestPrice = "无成交价格"
             }
 
-            var kardPicture = it.groupValues[6].replace("\"", "")
+            var kardPicture = it.groupValues[6].replace("\\", "")
 //            //非同名卡片（部分重叠）
 //            if (cardNameA == cardName|| cardNameB == cardName){
 //                //剔除RD卡片
@@ -1158,7 +1158,7 @@ class Command {
         }
 
 
-        //查卡(ourocg)
+        //查卡(百鸽)
         //开始查询
         if(arg.startsWith("查卡")||arg.startsWith("卡查")){
             //匹配查卡内容
