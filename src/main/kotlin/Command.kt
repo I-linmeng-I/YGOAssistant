@@ -1849,7 +1849,7 @@ class Command {
 
 
         if(arg.startsWith("查看tag")||arg.startsWith("看看#")){
-            var returnMessage ="以下为本群所有玩家及tag"
+            var returnMessage ="以下为本机器人下所有玩家及tag"
             GroupPlayerTags.data.forEach{
                 returnMessage += "\n"
 

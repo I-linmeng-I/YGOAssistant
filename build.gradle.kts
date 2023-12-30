@@ -8,7 +8,7 @@ plugins {
 }
 
 group = "Linmeng"
-version = "1.4.3"
+version = "1.4.5"
 
 repositories {
     maven ("https://maven.aliyun.com/repository/public")
