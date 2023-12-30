@@ -1,6 +1,5 @@
 package Linmeng
 
-import Linmeng.Data.PluginData.GroupPlayerTags
 import io.ktor.client.*
 import io.ktor.client.engine.okhttp.*
 import io.ktor.client.plugins.*
@@ -12,11 +11,9 @@ import net.mamoe.mirai.console.plugin.version
 import net.mamoe.mirai.console.util.ConsoleExperimentalApi
 import net.mamoe.mirai.contact.Contact.Companion.sendImage
 import net.mamoe.mirai.contact.nameCardOrNick
-import net.mamoe.mirai.event.events.GroupMessageEvent
 import net.mamoe.mirai.event.events.MessageEvent
 import net.mamoe.mirai.event.globalEventChannel
 import net.mamoe.mirai.message.data.*
-import net.mamoe.mirai.utils.ExternalResource
 import net.mamoe.mirai.utils.ExternalResource.Companion.uploadAsImage
 import net.mamoe.mirai.utils.info
 import java.io.File
@@ -25,9 +22,6 @@ import java.io.FileOutputStream
 import java.io.InputStream
 import java.net.HttpURLConnection
 import java.net.URL
-import net.mamoe.mirai.utils.ExternalResource.Companion.toExternalResource
-import java.io.ByteArrayInputStream
-import java.util.regex.Pattern
 
 
 @OptIn(ConsoleExperimentalApi::class, ExperimentalCommandDescriptors::class)

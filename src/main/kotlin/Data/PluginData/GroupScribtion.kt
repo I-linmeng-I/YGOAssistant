@@ -27,7 +27,7 @@ data class GroupData(
         val playerNameInURL = URLEncoder.encode( playerName,"UTF-8")
 
         //获取网页数据
-        var WebData = GetWebSourceCode("https://sapi.moecube.com:444/ygopro/arena/user?username=${playerNameInURL}")
+        val WebData = GetWebSourceCode("https://sapi.moecube.com:444/ygopro/arena/user?username=${playerNameInURL}")
 
         val  RatioMatch = Regex(""""athletic_wl_ratio":"(.*?)","arena""").find(WebData)?:return "就没这人"
         val  Ratio= RatioMatch.groupValues[1]

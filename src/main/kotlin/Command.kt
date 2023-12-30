@@ -2,6 +2,7 @@ package Linmeng
 
 
 import Linmeng.Data.PluginData.GroupPlayerTags
+import Linmeng.Data.PluginData.RobotTagData
 import Linmeng.YGOAssisttant.logger
 import io.ktor.client.*
 import io.ktor.client.engine.okhttp.*
@@ -19,10 +20,6 @@ import net.mamoe.mirai.utils.info
 import org.jfree.chart.ChartFactory
 import org.jfree.chart.ChartUtils
 import org.jfree.chart.block.BlockBorder
-import org.jfree.chart.entity.ChartEntity
-import org.jfree.chart.entity.EntityCollection
-import org.jfree.chart.entity.PieSectionEntity
-import org.jfree.chart.entity.StandardEntityCollection
 import org.jfree.chart.labels.StandardPieSectionLabelGenerator
 import org.jfree.chart.plot.*
 import org.jfree.chart.ui.HorizontalAlignment
@@ -31,17 +28,12 @@ import org.jfree.chart.ui.RectangleInsets
 import org.jfree.data.general.DefaultPieDataset
 import org.jfree.data.general.PieDataset
 import java.awt.Font
-import java.awt.TexturePaint
-import java.awt.font.FontRenderContext
-import java.awt.geom.Rectangle2D
-import java.awt.image.BufferedImage
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
 import java.io.StringReader
 import java.lang.Double.parseDouble
 import java.math.RoundingMode
-import java.net.HttpURLConnection
 import java.net.URL
 import java.net.URLEncoder
 import java.text.DecimalFormat
@@ -49,14 +41,10 @@ import java.text.SimpleDateFormat
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import java.util.*
-import javax.imageio.ImageIO
 import java.time.LocalDate
-import kotlin.math.roundToInt
 
 
-class LoginCredentialException : HttpStatusCodeException(HttpStatusCode.BadRequest)
 
-open class HttpStatusCodeException(val code: HttpStatusCode) : RuntimeException()
 
 class Command {
 
@@ -74,13 +62,13 @@ class Command {
         }
     }
 
-    fun SerchTag(playerName: String): String{
-        var tagData = GroupPlayerTags.data
+    fun SearchTag(playerName: String): String{
+        val tagData = GroupPlayerTags.data
         var returnMsg = ""
         if(tagData[playerName] !=null ){
-            if(tagData[playerName]?.isNotEmpty() == true){
-                tagData[playerName]?.forEach{
-                    returnMsg += " #$it"
+            if(tagData[playerName]?.RobotTagData?.isNotEmpty() == true){
+                tagData[playerName]?.RobotTagData?.forEach{
+                    returnMsg += " #${it}"
                 }
             }
         }
@@ -102,7 +90,7 @@ class Command {
                     return@runCatching ret
                 }
                 else{
-                    throw LoginCredentialException()
+                    return@runCatching ret
                 }
             }
         }.toString()
@@ -120,19 +108,18 @@ class Command {
 
     //排序
     fun GetSmaller(num1:Int,num2:Int):Int{
-        if(num1>num2){
-            return num2
-        }
-        else{
-            return  num1
+        return if(num1>num2){
+            num2
+        } else{
+            num1
         }
     }
 
     fun partition(li:MutableList<DuelInfo>, left:Int, right:Int):Int{
         var leftin = left
         var rightin = right
-        var tmp = GetSmaller(li[leftin].player1Rank.toInt(),li[leftin].player2Rank.toInt())
-        var tmpDuelInfo = li[leftin]
+        val tmp = GetSmaller(li[leftin].player1Rank.toInt(),li[leftin].player2Rank.toInt())
+        val tmpDuelInfo = li[leftin]
         while (leftin<rightin){
             while (leftin<rightin && GetSmaller(li[rightin].player1Rank.toInt(),li[rightin].player2Rank.toInt())>=tmp){
                 rightin -= 1
@@ -148,8 +135,8 @@ class Command {
     }
 
     fun QuickSort(li:MutableList<DuelInfo>, left:Int, right:Int){
-        var leftin = left
-        var rightin = right
+        val leftin = left
+        val rightin = right
         if(leftin<rightin){
             val mid = partition(li,leftin,rightin)
             QuickSort(li,leftin,mid-1)
@@ -178,21 +165,20 @@ class Command {
 
     //计算两个时间加减
     fun CalculateTime(startTime:String,endTime:String):String{
-        var dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss")
+        val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss")
 
-        var sTime: Date = dateFormat.parse(startTime)
-        var eTime: Date = dateFormat.parse(endTime)
+        val sTime: Date = dateFormat.parse(startTime)
+        val eTime: Date = dateFormat.parse(endTime)
         println("eTime=$eTime")
         val diff = eTime.time - sTime.time
         val days = diff / (1000 * 60 * 60 * 24)
         val hours = (diff - days * (1000 * 60 * 60 * 24)) / (1000 * 60 * 60)
         val minutes = ((diff - days * (1000 * 3600 * 24)) - hours * (1000 * 3600)) / (1000 * 60)
         val second = (diff - days * 1000 * 3600 * 24 - hours * 1000 * 3600 - minutes * 1000 * 60) / 1000
-        if(hours.toInt()==0){
-            return "$minutes:$second"
-        }
-        else{
-            return "$hours:$minutes:$second"
+        return if(hours.toInt()==0){
+            "$minutes:$second"
+        } else{
+            "$hours:$minutes:$second"
         }
     }
 
@@ -229,7 +215,7 @@ class Command {
             }
         }
         //创建用户数据
-        var userSearchData = UserSearchData()
+        val userSearchData = UserSearchData()
         userSearchData.UesrQQID = userID
         userSearchData.UserSearchContent =""
         userSearchData.UserSearchProcess = 0
@@ -250,8 +236,7 @@ class Command {
         }
     }
 
-    private class LongTimeNoFrameCancellationException :
-        CancellationException("Long time no frame!")
+
 
 
 
@@ -266,7 +251,7 @@ class Command {
                     //val formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
                     //val formatted = current.format(formatter)
                     //YGOAssisttant.logger.info { formatted }
-                    var test = withTimeoutOrNull( 600000) {
+                    val test = withTimeoutOrNull( 600000) {
                         (incoming.receive() as? Frame.Text)?.parse()
                     }.toString()
                     if(test == "null"){
@@ -319,6 +304,7 @@ class Command {
     }
 
     //获得萌卡房间相关
+    @OptIn(DelicateCoroutinesApi::class)
     @net.mamoe.mirai.console.util.ConsoleExperimentalApi
     private suspend fun Frame.Text.parse() {
 
@@ -339,7 +325,7 @@ class Command {
 
                     if(ResultMatch.isNotEmpty()){
                         ResultMatch.forEach{
-                            var duelInfo = DuelInfo()
+                            val duelInfo = DuelInfo()
                             duelInfo.id = it.groupValues[1]
                             duelInfo.Player1 = it.groupValues[2]
                             duelInfo.Player2 = it.groupValues[3]
@@ -367,7 +353,7 @@ class Command {
 
                     if(ResultMatch!=null){
 
-                        var duelInfo = DuelInfo()
+                        val duelInfo = DuelInfo()
                         duelInfo.id = ResultMatch.groupValues[1]
                         duelInfo.Player1 = ResultMatch.groupValues[2]
                         duelInfo.Player2 = ResultMatch.groupValues[3]
@@ -402,7 +388,8 @@ class Command {
 
                                         val subject = bot.getContactOrNull(userid)
                                         if(subject!=null){
-                                            var returnMsg="你订阅的玩家：" + WordsMatch(player1)
+                                            val tagA=SearchTag(player1)
+                                            var returnMsg="你订阅的玩家：" + WordsMatch(player1) + tagA
 
 //                                            if(tagData.TagPlayerAndTag[player1] !=null ){
 //                                                if(tagData.TagPlayerAndTag[player1]?.isNotEmpty() == true){
@@ -411,8 +398,8 @@ class Command {
 //                                                    }
 //                                                }
 //                                            }
-
-                                            returnMsg += " \n开始了和\n" + WordsMatch(player2)
+                                            val tagB=SearchTag(player2)
+                                            returnMsg += " \n开始了和\n" + WordsMatch(player2) + tagB
 
 
 //                                            if(tagData.TagPlayerAndTag[player2] !=null ){
@@ -440,7 +427,9 @@ class Command {
 
                                         val subject = bot.getContactOrNull(userid)
                                         if(subject!=null&& player2 != playerName){
-                                            var returnMsg="你订阅的玩家：" + WordsMatch(player2) + " \n开始了和\n" + WordsMatch(player1) + " 的对战"
+                                            val tagA=SearchTag(player1)
+                                            val tagB=SearchTag(player2)
+                                            var returnMsg="你订阅的玩家：" + WordsMatch(player2) +tagB + " \n开始了和\n" + WordsMatch(player1) +tagA+ " 的对战"
                                             if(playerToken!="0"){
                                                 returnMsg += "\n\n\n观战服务器为：tiramisu.mycard.moe\n端口为：8911\n观战房间密码为：$playerToken$duelID"
                                             }
@@ -481,24 +470,21 @@ class Command {
         }
         val CardData2 = GetWebSourceCode("https://ygocdb.com/card/"+ResultMatch[cardNumber-1].groupValues[1])
 
-        var avail = Regex("""OCG</i>([\s\S]*?)TCG</i>([\s\S]*?)</div>""").find(CardData2)?:return  "获得禁限信息失败"
-        var ocgAvailMatch: String
-        var tcgAvailMatch = ""
+        val avail = Regex("""OCG</i>([\s\S]*?)TCG</i>([\s\S]*?)</div>""").find(CardData2)?:return  "获得禁限信息失败"
+        val ocgAvailMatch: String
+        val tcgAvailMatch: String
 
         if(avail.groupValues[1].indexOf("未发售")==-1){
-            if(avail.groupValues[1].indexOf("禁止卡")>-1){
-                ocgAvailMatch = "禁止卡"
-            }
-            else if (avail.groupValues[1].indexOf("限制卡")>-1){
+            ocgAvailMatch = if(avail.groupValues[1].indexOf("禁止卡")>-1){
+                "禁止卡"
+            } else if (avail.groupValues[1].indexOf("限制卡")>-1){
                 if(avail.groupValues[1].indexOf("准限制卡")>-1){
-                    ocgAvailMatch = "准限制卡"
+                    "准限制卡"
+                } else{
+                    "限制卡"
                 }
-                else{
-                    ocgAvailMatch = "限制卡"
-                }
-            }
-            else{
-                ocgAvailMatch = "无限制"
+            } else{
+                "无限制"
             }
         }
         else{
@@ -506,19 +492,16 @@ class Command {
         }
 
         if(avail.groupValues[2].indexOf("未发售")==-1){
-            if(avail.groupValues[2].indexOf("禁止卡")>-1){
-                tcgAvailMatch = "禁止卡"
-            }
-            else if (avail.groupValues[2].indexOf("限制卡")>-1){
+            tcgAvailMatch = if(avail.groupValues[2].indexOf("禁止卡")>-1){
+                "禁止卡"
+            } else if (avail.groupValues[2].indexOf("限制卡")>-1){
                 if(avail.groupValues[2].indexOf("准限制卡")>-1){
-                    tcgAvailMatch = "准限制卡"
+                    "准限制卡"
+                } else{
+                    "限制卡"
                 }
-                else{
-                    tcgAvailMatch = "限制卡"
-                }
-            }
-            else{
-                tcgAvailMatch = "无限制"
+            } else{
+                "无限制"
             }
         }
         else{
@@ -545,11 +528,10 @@ class Command {
 
 
         val monsterMatch = Regex("""(.*?)<br>(.*)""").find(ResultMatch[cardNumber-1].groupValues[3])
-        if(monsterMatch == null){
-            outPutResult+=ResultMatch[cardNumber-1].groupValues[3]+"\n"
-        }
-        else{
-            outPutResult +=monsterMatch.groupValues[1]+"\n身板："+ monsterMatch.groupValues[2]+"\n"
+        outPutResult += if(monsterMatch == null){
+            ResultMatch[cardNumber-1].groupValues[3]+"\n"
+        } else{
+            monsterMatch.groupValues[1]+"\n身板："+ monsterMatch.groupValues[2]+"\n"
         }
         outPutResult+="卡片ID："+ResultMatch[cardNumber-1].groupValues[1]
 
@@ -676,7 +658,7 @@ class Command {
     //查卡片价格
     fun SearchCardPrices(cardName: String):String{
         val cardToSearchName = URLEncoder.encode( cardName,"UTF-8")
-        var WebData = GetWebSourceCode("https://api.jihuanshe.com/api/market/search/match-product?keyword=${cardToSearchName}&game_key=ygo&game_sub_key=ocg&page=1&type=card_version&token=") // 替换为你要请求的 URL
+        val WebData = GetWebSourceCode("https://api.jihuanshe.com/api/market/search/match-product?keyword=${cardToSearchName}&game_key=ygo&game_sub_key=ocg&page=1&type=card_version&token=") // 替换为你要请求的 URL
 
         val pageNumber = Regex(""""last_page":(.*?),"next_page_url":""").findAll(WebData).toList()[0].groupValues[1].toInt()
 
@@ -685,9 +667,9 @@ class Command {
         //获得所有的resultMatch
         repeat(pageNumber) {
             // 执行循环中的操作
-            var WebData = GetWebSourceCode("https://api.jihuanshe.com/api/market/search/match-product?keyword=${cardToSearchName}&game_key=ygo&game_sub_key=ocg&page=${it+1}&token=") // 替换为你要请求的 URL
+            val webData = GetWebSourceCode("https://api.jihuanshe.com/api/market/search/match-product?keyword=${cardToSearchName}&game_key=ygo&game_sub_key=ocg&page=${it+1}&token=") // 替换为你要请求的 URL
             //先匹配出数量
-            resultMatch.addAll(Regex(""""name_cn":"(.*?)","name_origin":"(.*?)"[\s\S]*?"card_id":(.*?),"number":"(.*?)","rarity":"(.*?)","image_url":"(.*?)","min_price":(.*?),"grade"""").findAll(WebData).toList())
+            resultMatch.addAll(Regex(""""name_cn":"(.*?)","name_origin":"(.*?)"[\s\S]*?"card_id":(.*?),"number":"(.*?)","rarity":"(.*?)","image_url":"(.*?)","min_price":(.*?),"grade"""").findAll(webData).toList())
 
         }
 
@@ -735,7 +717,7 @@ class Command {
                 lowestPrice = "无成交价格"
             }
 
-            var kardPicture = it.groupValues[6].replace("\\", "")
+            val kardPicture = it.groupValues[6].replace("\\", "")
 //            //非同名卡片（部分重叠）
 //            if (cardNameA == cardName|| cardNameB == cardName){
 //                //剔除RD卡片
@@ -767,7 +749,7 @@ class Command {
 
 
 
-        var WebData = GetWebSourceCode("https://ygocdb.com/more?search=$cardToSearchInURL&start=$page")
+        val WebData = GetWebSourceCode("https://ygocdb.com/more?search=$cardToSearchInURL&start=$page")
 
         val cardIdresultMatch = Regex("""<h3><span>(\d*)</span>&nbsp;""").findAll(WebData).toList()
 
@@ -808,11 +790,10 @@ class Command {
             outPutResult += resultNumber.toString() + "："+it.groupValues[2]+"\n类型："
 
             val monsterMatch = Regex("""(.*?)<br>(.*)""").find(it.groupValues[3])
-            if(monsterMatch == null){
-                outPutResult+=it.groupValues[3]
-            }
-            else{
-                outPutResult +=monsterMatch.groupValues[1]+"\n身板："+ monsterMatch.groupValues[2]
+            outPutResult += if(monsterMatch == null){
+                it.groupValues[3]
+            } else{
+                monsterMatch.groupValues[1]+"\n身板："+ monsterMatch.groupValues[2]
             }
             outPutResult += "\n卡片密码："+ cardIdresultMatch[resultNumber-1].groupValues[1]
 
@@ -833,7 +814,7 @@ class Command {
     suspend fun ProcessingCommand(arg: String,user:Contact,GroupID:Long):String{
 
         val userID = user.id
-        var isconnection = true
+        val isConnection: Boolean
 
         //MC相关
         //查分
@@ -862,7 +843,7 @@ class Command {
             val  FWMatch = Regex(""""today":"(\d)"}""").find(WebData)?:return "u1s1是不是查错人了，这没查到东西啊"
             val  FW= FWMatch.groupValues[1]
 
-            val tag = WordsMatch(playerToCheck)
+            val tag = SearchTag(playerToCheck)
 
             return "玩家：$playerToCheck $tag \nD.P：$DP\n排名：$Rank\n胜率：$Ratio%\n今日首胜: $FW/1"
         }
@@ -873,7 +854,7 @@ class Command {
             val playerNameInURL = URLEncoder.encode( playerToCheck,"UTF-8")
 
             //获取网页数据
-            var WebData = GetWebSourceCode("https://sapi.moecube.com:444/ygopro/arena/history?username=${playerNameInURL}&type=1&page_num=30")
+            val WebData = GetWebSourceCode("https://sapi.moecube.com:444/ygopro/arena/history?username=${playerNameInURL}&type=1&page_num=30")
 
             val  ResultMatch = Regex(""""usernamea":"(.*?)","usernameb":"(.*?)","[\s\S]*?"pta":(.*?),"ptb":(.*?),"pta_ex":(.*?),"ptb_ex":(.*?),"[\s\S]*?"start_time":"(.*?)T(.*?).000Z","end_time":"(.*?)T(.*?).000Z","winner":"(.*?)","isfirstwin":(.*?),""").findAll(WebData).toList()
             if(ResultMatch.isEmpty()){
@@ -893,11 +874,10 @@ class Command {
                     outputResults+= "${it.groupValues[1]} vs ${it.groupValues[2]}\n战况:"
                     if(it.groupValues[11]==playerToCheck){
                         outputResults+="胜利"+" D.P:"
-                        if(it.groupValues[12]=="true"){
-                            outputResults+="+"+format.format((it.groupValues[3].toFloat()-it.groupValues[5].toFloat()-4)).toString()+" +4(首胜)"
-                        }
-                        else{
-                            outputResults+="+"+format.format((it.groupValues[3].toFloat()-it.groupValues[5].toFloat())).toString()
+                        outputResults += if(it.groupValues[12]=="true"){
+                            "+"+format.format((it.groupValues[3].toFloat()-it.groupValues[5].toFloat()-4)).toString()+" +4(首胜)"
+                        } else{
+                            "+"+format.format((it.groupValues[3].toFloat()-it.groupValues[5].toFloat())).toString()
                         }
                     }
                     else{
@@ -912,11 +892,10 @@ class Command {
                     outputResults+= "${it.groupValues[2]} vs ${it.groupValues[1]}\n战况:"
                     if(it.groupValues[11]==playerToCheck){
                         outputResults+="胜利"+" D.P:"
-                        if(it.groupValues[12]=="true"){
-                            outputResults+="+"+format.format((it.groupValues[4].toFloat()-it.groupValues[6].toFloat()-4)).toString()+" +4(首胜)"
-                        }
-                        else{
-                            outputResults+="+"+format.format((it.groupValues[4].toFloat()-it.groupValues[6].toFloat())).toString()
+                        outputResults += if(it.groupValues[12]=="true"){
+                            "+"+format.format((it.groupValues[4].toFloat()-it.groupValues[6].toFloat()-4)).toString()+" +4(首胜)"
+                        } else{
+                            "+"+format.format((it.groupValues[4].toFloat()-it.groupValues[6].toFloat())).toString()
                         }
                     }
                     else{
@@ -963,7 +942,7 @@ class Command {
 
             //时间
 
-            var dateFormat =  DateTimeFormatter.ofPattern("yyyy-MM-dd")
+            val dateFormat =  DateTimeFormatter.ofPattern("yyyy-MM-dd")
 
             var FTime = LocalDate.parse(ResultMatch[ResultMatch.size-1].groupValues[7], dateFormat)
 
@@ -1020,25 +999,22 @@ class Command {
 
 
             //分数变化
-            var StartDP: Float
-            if(ResultMatch[RecordSize].groupValues[1] == playerToCheck){
-                StartDP = ResultMatch[RecordSize].groupValues[5].toFloat()
+            val StartDP: Float = if(ResultMatch[RecordSize].groupValues[1] == playerToCheck){
+                ResultMatch[RecordSize].groupValues[5].toFloat()
+            } else{
+                ResultMatch[RecordSize].groupValues[6].toFloat()
             }
-            else{
-                StartDP = ResultMatch[RecordSize].groupValues[6].toFloat()
-            }
-            var EndDP: Float
-            if(ResultMatch[StartNum].groupValues[1] == playerToCheck){
-                EndDP = ResultMatch[StartNum].groupValues[3].toFloat()
-            }
-            else{
-                EndDP = ResultMatch[StartNum].groupValues[4].toFloat()
+            val EndDP: Float
+            EndDP = if(ResultMatch[StartNum].groupValues[1] == playerToCheck){
+                ResultMatch[StartNum].groupValues[3].toFloat()
+            } else{
+                ResultMatch[StartNum].groupValues[4].toFloat()
             }
 
-            val tag = WordsMatch(playerToCheck)
+
             //String.format("%02d", date.monthValue)
             //logger.info("当前月份: $currentMonth" + "当前年份: $currentYear")
-            return "玩家："+playerToCheck +" "+tag +"\n"+ TargetMonth+"月场次：" + (RecordSize+1-StartNum).toString() +"\n" + "打卡情况：" + FirstWinNum.toString() + "\n"+ TargetMonth+"月胜率：" +"%.2f".format((winNum.toFloat()/(RecordSize+1-StartNum).toFloat())*100)+"%"+"\n" + "月初分数：" + StartDP.toInt() + "||" + "月末分数：" + EndDP.toInt() + "\n"+ "分数变化：" + (EndDP - StartDP).toInt()
+            return "玩家："+playerToCheck +"\n"+ TargetMonth+"月场次：" + (RecordSize+1-StartNum).toString() +"\n" + "打卡情况：" + FirstWinNum.toString() + "\n"+ TargetMonth+"月胜率：" +"%.2f".format((winNum.toFloat()/(RecordSize+1-StartNum).toFloat())*100)+"%"+"\n" + "月初分数：" + StartDP.toInt() + "||" + "月末分数：" + EndDP.toInt() + "\n"+ "分数变化：" + (EndDP - StartDP).toInt()
             //"||"+LTime.year.toString()+ "||" +LTime.monthValue.toString() + "||" + "当前月份: $currentMonth" + "当前年份: $currentYear")
 
         }
@@ -1058,7 +1034,7 @@ class Command {
 
             //群聊 订阅用户优先显示
             if(GroupID.toInt() != -1){
-                var subData =  GroupScribtion.data.getOrPut(GroupID.toLong()){ GroupData(mutableListOf<String>())}
+                val subData =  GroupScribtion.data.getOrPut(GroupID){ GroupData(mutableListOf<String>())}
 
                 for(i in 0..duelList.size-1){
 
@@ -1083,7 +1059,7 @@ class Command {
 
             var returnMsg = ""
 
-            if(page.toInt()<1){
+            if(page <1){
                 page = 1
             }
             if((page-1)*30>=duelList.size){
@@ -1109,13 +1085,13 @@ class Command {
 
                 returnMsg +=WordsMatch( duelList[i].Player1)
 
-                returnMsg += SerchTag(duelList[i].Player1)
+                returnMsg += SearchTag(duelList[i].Player1)
 
 
                 returnMsg += "\n排名："+duelList[i].player1Rank+"  胜率："+duelList[i].player1Ratio + "%"+ "\nVS\n"+
                         WordsMatch(duelList[i].Player2)
 
-                returnMsg += SerchTag(duelList[i].Player2)
+                returnMsg += SearchTag(duelList[i].Player2)
 //                if(tagData[duelList[i].Player2] !=null ){
 //                    if(tagData[duelList[i].Player2]?.isNotEmpty() == true){
 //                        tagData[duelList[i].Player2]?.forEach{
@@ -1126,19 +1102,17 @@ class Command {
 
                 returnMsg += "\n排名："+duelList[i].player2Rank+"  胜率："+duelList[i].player2Ratio+"%"
 
-                if(duelList[i].StartTime!="-1"){
-                    returnMsg +="\n对局已过去时间："+CalculateTime(duelList[i].StartTime,formatted)
-                }
-                else{
-                    returnMsg += "\n对局已过去时间：未知"
+                returnMsg += if(duelList[i].StartTime!="-1"){
+                    "\n对局已过去时间："+CalculateTime(duelList[i].StartTime,formatted)
+                } else{
+                    "\n对局已过去时间：未知"
                 }
 
                 //是否增加对战房间密码
-                if(token != ""){
-                    returnMsg += "\n对战房间密码:"+token+duelList[i].id  +"{forwardmessage的分割符}"
-                }
-                else{
-                    returnMsg += "{forwardmessage的分割符}"
+                returnMsg += if(token != ""){
+                    "\n对战房间密码:"+token+duelList[i].id  +"{forwardmessage的分割符}"
+                } else{
+                    "{forwardmessage的分割符}"
                 }
 
             }
@@ -1147,7 +1121,7 @@ class Command {
         }
 
         if(arg == "查萌卡排名"){
-            var webData = GetWebSourceCode("https://sapi.moecube.com:444/ygopro/arena/users?o=pt")
+            val webData = GetWebSourceCode("https://sapi.moecube.com:444/ygopro/arena/users?o=pt")
             val resultMatch = Regex(""""username":"(.*?)",[\s\S]*?"pt":(.*?),[\s\S]*?"athletic_win":(\d*),[\s\S]*?"athletic_lose":(\d*),[\s\S]*?"athletic_draw":(\d*),""").
                     findAll(webData).toList()
 
@@ -1156,7 +1130,7 @@ class Command {
                 var rank = 1
 
                 resultMatch.forEach{
-                    val tag = SerchTag(WordsMatch(it.groupValues[1]))
+                    val tag = SearchTag(WordsMatch(it.groupValues[1]))
                     returnMsg +=rank.toString() +". 玩家名：" + WordsMatch(it.groupValues[1]) + tag + "\n胜率：" +
                             "%.2f".format((it.groupValues[3].toFloat()/(it.groupValues[3].toFloat()+it.groupValues[4].toFloat()+it.groupValues[5].toFloat()))*100) +
                             "% D.P："+it.groupValues[2].toFloat().toInt().toString() + "{forwardmessage的分割符}"
@@ -1172,8 +1146,8 @@ class Command {
         if(arg == "开始连接"){
             val index = Config.admin.indexOfFirst { it ==  userID}
             if (index == -1) return "你不是管理员，关于如何添加管理员。可以去GitHub上看readme"
-            isconnection = true
-            while (isconnection) {
+            isConnection = true
+            while (isConnection) {
                 duelList.clear()
                 LinkStart()
                 Thread.sleep(3000)
@@ -1196,16 +1170,14 @@ class Command {
         if(arg == "关闭连接"){
             val index = Config.admin.indexOfFirst { it ==  userID}
             if (index == -1) return "你不是管理员，关于如何添加管理员。可以去GitHub上看readme"
-            isconnection = false
             return "关了,离开了，不要爱了"
         }
 
         if(arg == "连接状态"){
-            if(client.isActive == true){
-                return "连着"
-            }
-            else{
-                return "断了"
+            return if(client.isActive == true){
+                "连着"
+            } else{
+                "断了"
             }
         }
 
@@ -1214,10 +1186,10 @@ class Command {
         //开始查询
         if(arg.startsWith("查卡")||arg.startsWith("卡查")){
             //匹配查卡内容
-            val matchResult = Regex("""[卡查|查卡] \s*(.*)""").find(arg)?:return "null"
+            val matchResult = Regex("""[查|卡][查|卡] \s*(.*)""").find(arg)?:return "null"
             val cardToSearch = matchResult.groupValues[1]
             //更新用户数据
-            var userSearchData = UpdateUserList(userID)
+            val userSearchData = UpdateUserList(userID)
             userSearchData.UserSearchContent = cardToSearch
             userSearchData.UserSearchPage = 1
             userSearchData.UserSearchProcess =0
@@ -1263,16 +1235,15 @@ class Command {
             else//翻页
             {
                 var Page = IsInUserList.UserSearchPage
-                if(Page>1){
+                return if(Page>1){
                     Page -= 1
                     IsInUserList.UserSearchPage -=1
                     UserSearchDataList.add(IsInUserList)
 
-                    return SearchCard(IsInUserList.UserSearchContent,(Page-1)*10,0,"")
-                }
-                else{
+                    SearchCard(IsInUserList.UserSearchContent,(Page-1)*10,0,"")
+                } else{
                     UserSearchDataList.add(IsInUserList)
-                    return "已经是第一页了"
+                    "已经是第一页了"
                 }
             }
         }
@@ -1298,21 +1269,19 @@ class Command {
             }
             else//翻页
             {
-                var Page = IsInUserList.UserSearchPage
+                val Page = IsInUserList.UserSearchPage
                 val content = SearchCard(IsInUserList.UserSearchContent,Page*10,0,"")
 
                 //是否有内容，没有则是最后一页
-                if(content == "没有找到相关的东西")
-                {
+                return if(content == "没有找到相关的东西") {
                     UserSearchDataList.add(IsInUserList)
 
-                    return "已经是最后一页了"
-                }
-                else{
+                    "已经是最后一页了"
+                } else{
                     IsInUserList.UserSearchPage+=1
                     UserSearchDataList.add(IsInUserList)
 
-                    return content
+                    content
                 }
 
 //                if(Page>1){
@@ -1453,7 +1422,7 @@ class Command {
 
 
 
-                    var WebData = GetWebSourceCode("https://ygocdb.com/more?search=$cardToSearchInURL&start=${(IsInUserList.UserSearchPage-1)*10}")
+                    val WebData = GetWebSourceCode("https://ygocdb.com/more?search=$cardToSearchInURL&start=${(IsInUserList.UserSearchPage-1)*10}")
 
                     val  resultMatch = Regex("""<h3><span>(\d*?)</span>&nbsp;[\s\S]*?<strong class="name"><span>(.*?)</span><br></strong>.*\s.*\s*(.*)""").findAll(WebData).toList()
 
@@ -1501,7 +1470,7 @@ class Command {
                             replaceWith.replace(URLEncoder.encode(IsInUserList.UserSearchContent, "UTF-8"), "+")
 
 
-                        var WebData =GetWebSourceCode("https://ygocdb.com/more?search=$cardToSearchInURL&start=${(IsInUserList.UserSearchPage - 1) * 10}")
+                        val WebData =GetWebSourceCode("https://ygocdb.com/more?search=$cardToSearchInURL&start=${(IsInUserList.UserSearchPage - 1) * 10}")
 
                         val resultMatch =
                             Regex("""<h3><span>(\d*?)</span>&nbsp;[\s\S]*?<strong class="name"><span>(.*?)</span><br></strong>.*\s.*\s*(.*)""").findAll(WebData).toList()
@@ -1527,15 +1496,13 @@ class Command {
             val IsInUserList = UpdateUserList(userID)//获得用户数据
 
             //不存在则返回
-            if(IsInUserList.UserSearchContent == ""){
-                return "null"
-            }
-            else
-            {
+            return if(IsInUserList.UserSearchContent == ""){
+                "null"
+            } else {
                 //修改用户数据并添加到列表
                 UserSearchDataList.add(IsInUserList)
                 //返回单卡数据
-                return SearchCard(IsInUserList.UserSearchContent,(IsInUserList.UserSearchPage-1)*10,IsInUserList.UserSearchCard,"查价格")
+                SearchCard(IsInUserList.UserSearchContent,(IsInUserList.UserSearchPage-1)*10,IsInUserList.UserSearchCard,"查价格")
             }
         }
 
@@ -1585,7 +1552,7 @@ class Command {
 
 
             val matchResult = Regex("""添加群订阅 (.*)""").find(arg)?:return "添加失败，格式为\n添加群订阅 用户名"
-            var groupID = GroupID
+            val groupID = GroupID
 
 
             if(groupID.toInt() == -1){
@@ -1594,7 +1561,7 @@ class Command {
 
             val playerName = matchResult.groupValues[1]
 
-            var subData =  GroupScribtion.data.getOrPut(groupID.toLong()){ GroupData(mutableListOf<String>())}
+            val subData =  GroupScribtion.data.getOrPut(groupID){ GroupData(mutableListOf<String>())}
 
             return subData.AddSubscribeUser(playerName)
 
@@ -1603,7 +1570,7 @@ class Command {
         if(arg.startsWith("删除群订阅 ")){
 
             val matchResult = Regex("""删除群订阅 (.*)""").find(arg)?:return "删除失败，格式为\n删除群订阅 用户名"
-            var groupID = GroupID
+            val groupID = GroupID
 
 
             if(groupID.toInt() == -1){
@@ -1611,7 +1578,7 @@ class Command {
             }
             val playerName = matchResult.groupValues[1]
 
-            var subData =  GroupScribtion.data.getOrPut(groupID.toLong()){ GroupData(mutableListOf<String>())}
+            val subData =  GroupScribtion.data.getOrPut(groupID){ GroupData(mutableListOf<String>())}
 
             return subData.DissubscribeUser(playerName)
 
@@ -1624,7 +1591,7 @@ class Command {
                 return "请在群里使用这个指令"
             }
 
-            var subData =  GroupScribtion.data.getOrPut(groupID.toLong()){ GroupData(mutableListOf<String>())}
+            val subData =  GroupScribtion.data.getOrPut(groupID){ GroupData(mutableListOf<String>())}
 
             var returnMsg = "该群订阅玩家:"
 
@@ -1642,7 +1609,7 @@ class Command {
 
             val playerName = matchResult.groupValues[1]
 
-            var subData =  PersonalSubscription.data.getOrPut(userID){ PersonalData(mutableListOf<String>())}
+            val subData =  PersonalSubscription.data.getOrPut(userID){ PersonalData(mutableListOf<String>())}
 
             return subData.AddSubscribeUser(playerName)
 
@@ -1654,7 +1621,7 @@ class Command {
 
             val playerName = matchResult.groupValues[1]
 
-            var subData =  PersonalSubscription.data.getOrPut(userID){ PersonalData(mutableListOf<String>())}
+            val subData =  PersonalSubscription.data.getOrPut(userID){ PersonalData(mutableListOf<String>())}
 
             return subData.DissubscribeUser(playerName)
 
@@ -1663,15 +1630,15 @@ class Command {
         if(arg == "显示个人订阅"){
 
 
-            var subData =  PersonalSubscription.data.getOrPut(userID){ PersonalData(mutableListOf<String>())}
+            val subData =  PersonalSubscription.data.getOrPut(userID){ PersonalData(mutableListOf<String>())}
 
             var returnMsg = ""
 
             subData.SubscribedUser.forEach{
                 val playerNameInURL = URLEncoder.encode( it,"UTF-8")
-                var WebData = GetWebSourceCode("https://sapi.moecube.com:444/ygopro/arena/user?username=${playerNameInURL}")
+                val webData = GetWebSourceCode("https://sapi.moecube.com:444/ygopro/arena/user?username=${playerNameInURL}")
 
-                val  PlayerinfoMatch1 = Regex(""","pt":(\d*),".*?"athletic_wl_ratio":"(.*?)","arena_rank":(.*?)}""").find(WebData)
+                val  PlayerinfoMatch1 = Regex(""","pt":(\d*),".*?"athletic_wl_ratio":"(.*?)","arena_rank":(.*?)}""").find(webData)
 
                 if(PlayerinfoMatch1!=null){
                     returnMsg += "玩家："+it+"\nD.P:"+PlayerinfoMatch1.groupValues[1]+"\n排名："+
@@ -1694,7 +1661,7 @@ class Command {
                 val accountIDMatch = Regex("""id":(\d*),"username":"(.*?)"""").find(accountInfo)?:return accountInfo
                 val token=generateToken(accountIDMatch.groupValues[1].toInt())
 
-                var subData =  PersonalSubscription.data.getOrPut(userID){ PersonalData(mutableListOf<String>())}
+                val subData =  PersonalSubscription.data.getOrPut(userID){ PersonalData(mutableListOf<String>())}
 
                 subData.PlayerToken = token
                 subData.PlayerName = accountIDMatch.groupValues[2]
@@ -1707,7 +1674,7 @@ class Command {
         }
 
         if(arg == "萌卡账号token"){
-            var subData =  PersonalSubscription.data.getOrPut(userID){ PersonalData(mutableListOf<String>())}
+            val subData =  PersonalSubscription.data.getOrPut(userID){ PersonalData(mutableListOf<String>())}
 
             if(subData.PlayerToken!="0"){
                 return "你当前绑定账号用户名为:"+subData.PlayerName+"\n你的观战和房间token为:"+subData.PlayerToken +
@@ -1719,7 +1686,7 @@ class Command {
 
         if(arg == "饼图"){
 
-            var WebData = GetWebSourceCode("https://sapi.moecube.com:444/ygopro/analytics/deck/type?type=day&source=mycard-athletic")
+            val WebData = GetWebSourceCode("https://sapi.moecube.com:444/ygopro/analytics/deck/type?type=day&source=mycard-athletic")
 
             val resultMatch = Regex(""""name":"(.*?)","recent_time":".*?count":"(.*?)",".*?,"win":"(.*?)","draw":".*?","lose":"(.*?)"},.*?"win":"(.*?)","draw":".*?","lose":"(.*?)"""").
             findAll(WebData).toList()
@@ -1735,7 +1702,7 @@ class Command {
 
             if(resultMatch.isNotEmpty()){
                 for(i in 0..24){
-                    dataset.setValue(resultMatch[i].groupValues[1].toString(), resultMatch[i].groupValues[2].toInt())
+                    dataset.setValue(resultMatch[i].groupValues[1], resultMatch[i].groupValues[2].toInt())
                 }
             }
 
@@ -1756,14 +1723,14 @@ class Command {
                 false // 是否生成URL链接
             )
 
-            val plot = chart.plot as PiePlot<String>
+            val plot = chart.plot as PiePlot<*>
             val font = Font("宋体", Font.BOLD, 18)
             plot.labelFont = Font("宋体", Font.BOLD, 14)
             chart.title.font = Font("宋体", Font.BOLD, 24)
 
             plot.labelBackgroundPaint = null
 
-            var labelGenerator = StandardPieSectionLabelGenerator("{0} ({2})", Locale.CHINA)
+            val labelGenerator = StandardPieSectionLabelGenerator("{0} ({2})", Locale.CHINA)
             plot.labelGenerator = labelGenerator
             plot.labelDistributor = PieLabelDistributor(1)
 
@@ -1804,7 +1771,7 @@ class Command {
             // 输出为PNG图片
 
             // 输出为PNG图片
-            var outputFile: FileOutputStream?
+            val outputFile: FileOutputStream?
             try {
                 outputFile = FileOutputStream("./data/YGOAssistant/piechart.png")
                 ChartUtils.writeChartAsPNG(outputFile, chart, 1080, 720)
@@ -1821,7 +1788,7 @@ class Command {
             val playerNameInURL = URLEncoder.encode( playerToCheck,"UTF-8")
 
             //获取网页数据
-            var WebData = GetWebSourceCode("https://sapi.moecube.com:444/ygopro/arena/user?username=${playerNameInURL}")
+            val WebData = GetWebSourceCode("https://sapi.moecube.com:444/ygopro/arena/user?username=${playerNameInURL}")
 
             //val filePath = "a.txt"
             //File(filePath).appendText(WebData.toString())
@@ -1830,17 +1797,17 @@ class Command {
 
 
 
-            var subData =  GroupPlayerTags.data.getOrPut(playerToCheck){mutableListOf<String>()}
+            val subData =  GroupPlayerTags.data.getOrPut(playerToCheck){ RobotTagData(mutableListOf<String>()) }
 
-            if(subData.indexOf(matchResult.groupValues[2])!=-1){
+            if(subData.RobotTagData.indexOf(matchResult.groupValues[2])!=-1){
                 return "该tag已经添加过了"
             }
 
-            subData.add(matchResult.groupValues[2])
+            GroupPlayerTags.data[playerToCheck]?.RobotTagData?.add(matchResult.groupValues[2])
 
-            var returnMessage = "添加成功，当前玩家tag："
+            var returnMessage = "添加成功，${playerToCheck}的tag："
 
-            subData.forEach{
+            subData.RobotTagData.forEach{
                 returnMessage+="#"+it+" "
             }
 
@@ -1851,18 +1818,15 @@ class Command {
         if(arg.startsWith("查看tag")||arg.startsWith("看看#")){
             var returnMessage ="以下为本机器人下所有玩家及tag"
             GroupPlayerTags.data.forEach{
-                returnMessage += "\n"
-
                 val subsubData = it.value
 
-
-                if(subsubData.isEmpty()){
-                    GroupPlayerTags.data.remove(it.key)
+                if(subsubData.RobotTagData.isEmpty()){
+                    //GroupPlayerTags.data.remove(it.key)
                 }
                 else{
+                    returnMessage += "\n"
                     returnMessage += it.key +":"
-
-                    subsubData.forEach{
+                    subsubData.RobotTagData.forEach{
                         returnMessage +="#"+it+" "
                     }
                 }
@@ -1873,13 +1837,13 @@ class Command {
 
         if(arg.startsWith("删除tag ")||arg.startsWith("掉帽子 ")){
             val matchResult = Regex(""".*? ([\s\S]*) ([\s\S]*)""").find(arg)?:return "null"
-            var subData =  GroupPlayerTags.data
+            val subData =  GroupPlayerTags.data
 
-            if(subData.get(matchResult.groupValues[2])?.isNotEmpty() == true){
+            if(subData.get(matchResult.groupValues[2])?.RobotTagData?.isNotEmpty() == true){
                 return "玩家并无该tag"
             }
 
-            subData.remove(matchResult.groupValues[2])
+            GroupPlayerTags.data.remove(matchResult.groupValues[2])
 
             var returnMessage = "删除成功！当前玩家tag："
 
@@ -1917,7 +1881,7 @@ class DuelInfo{
     fun GetPlayerInfo(){
         Thread {
             val playerNameInURL1 = URLEncoder.encode( Player1,"UTF-8")
-            var WebData = GetWebSourceCode("https://sapi.moecube.com:444/ygopro/arena/user?username=${playerNameInURL1}")
+            val WebData = GetWebSourceCode("https://sapi.moecube.com:444/ygopro/arena/user?username=${playerNameInURL1}")
 
             val  PlayerinfoMatch1 = Regex(""""athletic_wl_ratio":"(.*?)","arena_rank":(.*?)}""").find(WebData)
             if(PlayerinfoMatch1!=null){
@@ -1932,7 +1896,7 @@ class DuelInfo{
             }
 
             val playerNameInURL2 = URLEncoder.encode( Player2,"UTF-8")
-            var WebData2 = GetWebSourceCode("https://sapi.moecube.com:444/ygopro/arena/user?username=${playerNameInURL2}")
+            val WebData2 = GetWebSourceCode("https://sapi.moecube.com:444/ygopro/arena/user?username=${playerNameInURL2}")
 
             val  PlayerinfoMatch2 = Regex(""""athletic_wl_ratio":"(.*?)","arena_rank":(.*?)}""").find(WebData2)
             if(PlayerinfoMatch2!=null){
