@@ -7,10 +7,5 @@ import java.net.URL
 import java.net.URLEncoder
 
 object GroupPlayerTags:AutoSavePluginData("GroupPlayerTags") {
-    var data:MutableMap<Long, TagGroupData> by value()
+    var data:MutableMap<String ,MutableList<String>> by value()
 }
-
-@kotlinx.serialization.Serializable
-data class TagGroupData(
-    var TagPlayerAndTag:MutableMap<String ,MutableList<String>>
-)

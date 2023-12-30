@@ -2,7 +2,6 @@ package Linmeng
 
 
 import Linmeng.Data.PluginData.GroupPlayerTags
-import Linmeng.Data.PluginData.TagGroupData
 import Linmeng.YGOAssisttant.logger
 import io.ktor.client.*
 import io.ktor.client.engine.okhttp.*
@@ -73,6 +72,19 @@ class Command {
         install(HttpTimeout) {
             socketTimeoutMillis = 5000
         }
+    }
+
+    fun SerchTag(playerName: String): String{
+        var tagData = GroupPlayerTags.data
+        var returnMsg = ""
+        if(tagData[playerName] !=null ){
+            if(tagData[playerName]?.isNotEmpty() == true){
+                tagData[playerName]?.forEach{
+                    returnMsg += " #$it"
+                }
+            }
+        }
+        return returnMsg
     }
 
     suspend fun login(username: String, password: String): String =
@@ -164,7 +176,7 @@ class Command {
         return word
     }
 
-    //计算时间
+    //计算两个时间加减
     fun CalculateTime(startTime:String,endTime:String):String{
         var dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss")
 
@@ -182,6 +194,14 @@ class Command {
         else{
             return "$hours:$minutes:$second"
         }
+    }
+
+    //计算时间加小时
+    fun addEightHours(input: String,addTime: Long): String {
+        val formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
+        val dateTime = LocalDateTime.parse(input, formatter)
+        val newDateTime = dateTime.plusHours(addTime)
+        return newDateTime.format(formatter)
     }
     //是不是数字
     fun IsNumber(args: String):Boolean {
@@ -461,20 +481,50 @@ class Command {
         }
         val CardData2 = GetWebSourceCode("https://ygocdb.com/card/"+ResultMatch[cardNumber-1].groupValues[1])
 
-        var avail = Regex("""<i class="(.*?)">""").find(CardData2).toString()
-        var availMatch: String
-        if(avail == "l0"){
-            availMatch = "禁止卡"
-        }
-        else if(avail == "l1"){
-            availMatch = "限制卡"
-        }
-        else if(avail == "l2"){
-            availMatch = "准限制卡"
+        var avail = Regex("""OCG</i>([\s\S]*?)TCG</i>([\s\S]*?)</div>""").find(CardData2)?:return  "获得禁限信息失败"
+        var ocgAvailMatch: String
+        var tcgAvailMatch = ""
+
+        if(avail.groupValues[1].indexOf("未发售")==-1){
+            if(avail.groupValues[1].indexOf("禁止卡")>-1){
+                ocgAvailMatch = "禁止卡"
+            }
+            else if (avail.groupValues[1].indexOf("限制卡")>-1){
+                if(avail.groupValues[1].indexOf("准限制卡")>-1){
+                    ocgAvailMatch = "准限制卡"
+                }
+                else{
+                    ocgAvailMatch = "限制卡"
+                }
+            }
+            else{
+                ocgAvailMatch = "无限制"
+            }
         }
         else{
-            availMatch = "无限制卡"
+            ocgAvailMatch = "未在ocg发售"
         }
+
+        if(avail.groupValues[2].indexOf("未发售")==-1){
+            if(avail.groupValues[2].indexOf("禁止卡")>-1){
+                tcgAvailMatch = "禁止卡"
+            }
+            else if (avail.groupValues[2].indexOf("限制卡")>-1){
+                if(avail.groupValues[2].indexOf("准限制卡")>-1){
+                    tcgAvailMatch = "准限制卡"
+                }
+                else{
+                    tcgAvailMatch = "限制卡"
+                }
+            }
+            else{
+                tcgAvailMatch = "无限制"
+            }
+        }
+        else{
+            tcgAvailMatch = "未在tcg发售"
+        }
+
 
         val CardData = GetWebSourceCode("https://ygocdb.com/api/v0/?search="+ResultMatch[cardNumber-1].groupValues[1])
 
@@ -503,7 +553,7 @@ class Command {
         }
         outPutResult+="卡片ID："+ResultMatch[cardNumber-1].groupValues[1]
 
-        outPutResult+= "\n禁限情况："+availMatch + "\n" //+ "{分割多段}"
+        outPutResult+= "\nOCG禁限情况："+ocgAvailMatch+"\nTCG禁限情况：" +tcgAvailMatch+ "\n" //+ "{分割多段}"
 
         if(PEffect!=""){
             outPutResult+="灵摆效果："
@@ -581,11 +631,11 @@ class Command {
             val resultString2 = replaceWith2.replace(resultString, "")
 
             val effect = resultString2.split("</li><li>")
-            returnMsg="卡片调整信息:"
+            returnMsg="卡片调整信息:\n"
             effect.forEach{
-                returnMsg+="\n"+it
+                returnMsg+=it
             }
-
+            logger.info(returnMsg)
 //            val ResultMatch = Regex()
         }
 
@@ -597,6 +647,7 @@ class Command {
             val AnswerResultMatch=Regex("""<div class="qa answer">(.*?)</div>""").findAll(WebData).toList()
             if(AnswerResultMatch.isNotEmpty()){
                 returnMsg=""
+                returnMsg += "日文F&Q"
                 for(i in AnswerResultMatch.indices){
                     val replaceWith = Regex("""(<a .*?">)""")
                     val resultString = replaceWith.replace(QuestionResultMatch[i].groupValues[1], "")
@@ -616,8 +667,6 @@ class Command {
 
                     returnMsg +="提问："+resultString2+"\n\n回答："+resultString4 + "{forwardmessage的分割符}"
                 }
-
-                returnMsg += "日文F&Q"
             }
         }
 
@@ -813,7 +862,9 @@ class Command {
             val  FWMatch = Regex(""""today":"(\d)"}""").find(WebData)?:return "u1s1是不是查错人了，这没查到东西啊"
             val  FW= FWMatch.groupValues[1]
 
-            return "玩家：$playerToCheck\nD.P：$DP\n排名：$Rank\n胜率：$Ratio%\n今日首胜: $FW/1"
+            val tag = WordsMatch(playerToCheck)
+
+            return "玩家：$playerToCheck $tag \nD.P：$DP\n排名：$Rank\n胜率：$Ratio%\n今日首胜: $FW/1"
         }
         //查历史
         if(arg.startsWith("查历史 ")||arg.startsWith("查记录 ")){
@@ -834,6 +885,10 @@ class Command {
             //舍弃规则，RoundingMode.FLOOR表示直接舍弃。
             format.roundingMode = RoundingMode.CEILING
             ResultMatch.forEach{
+
+                //时间加时区
+                val resultTime = addEightHours(it.groupValues[7]+" "+it.groupValues[8],8)
+
                 if(playerToCheck==it.groupValues[1]){
                     outputResults+= "${it.groupValues[1]} vs ${it.groupValues[2]}\n战况:"
                     if(it.groupValues[11]==playerToCheck){
@@ -850,7 +905,7 @@ class Command {
                         outputResults+="-"+format.format(it.groupValues[5].toFloat()-it.groupValues[3].toFloat()).toString()
                     }
 
-                    outputResults+="\n开始时间:"+it.groupValues[7]+" "+it.groupValues[8] +
+                    outputResults+="\n开始时间:"+resultTime +
                             " 耗时:"+CalculateTime(it.groupValues[7]+" "+it.groupValues[8],it.groupValues[9]+" "+it.groupValues[10])+"{forwardmessage的分割符}"
                 }
                 else{
@@ -868,8 +923,9 @@ class Command {
                         outputResults+="败北 "+" D.P:"
                         outputResults+="-"+format.format((it.groupValues[6].toFloat()-it.groupValues[4].toFloat())).toString()
                     }
+                    //时间计算
 
-                    outputResults+="\n开始时间:"+it.groupValues[7]+" "+it.groupValues[8] +
+                    outputResults+="\n开始时间:"+resultTime +
                             " 耗时:"+CalculateTime(it.groupValues[7]+" "+it.groupValues[8],it.groupValues[9]+" "+it.groupValues[10])+"{forwardmessage的分割符}"
                 }
 
@@ -979,10 +1035,10 @@ class Command {
                 EndDP = ResultMatch[StartNum].groupValues[4].toFloat()
             }
 
-
+            val tag = WordsMatch(playerToCheck)
             //String.format("%02d", date.monthValue)
-            logger.info("当前月份: $currentMonth" + "当前年份: $currentYear")
-            return "玩家："+playerToCheck +"\n"+ TargetMonth+"月场次：" + (RecordSize+1-StartNum).toString() +"\n" + "打卡情况：" + FirstWinNum.toString() + "\n"+ TargetMonth+"月胜率：" +"%.2f".format((winNum.toFloat()/(RecordSize+1-StartNum).toFloat())*100)+"%"+"\n" + "月初分数：" + StartDP.toInt() + "||" + "月末分数：" + EndDP.toInt() + "\n"+ "分数变化：" + (EndDP - StartDP).toInt()
+            //logger.info("当前月份: $currentMonth" + "当前年份: $currentYear")
+            return "玩家："+playerToCheck +" "+tag +"\n"+ TargetMonth+"月场次：" + (RecordSize+1-StartNum).toString() +"\n" + "打卡情况：" + FirstWinNum.toString() + "\n"+ TargetMonth+"月胜率：" +"%.2f".format((winNum.toFloat()/(RecordSize+1-StartNum).toFloat())*100)+"%"+"\n" + "月初分数：" + StartDP.toInt() + "||" + "月末分数：" + EndDP.toInt() + "\n"+ "分数变化：" + (EndDP - StartDP).toInt()
             //"||"+LTime.year.toString()+ "||" +LTime.monthValue.toString() + "||" + "当前月份: $currentMonth" + "当前年份: $currentYear")
 
         }
@@ -1046,32 +1102,27 @@ class Command {
                 token = subData.PlayerToken
             }
 
-            var tagData =  GroupPlayerTags.data.getOrPut(GroupID){ TagGroupData(mutableMapOf<String,MutableList<String>>()) }
+
 
             for (i in ((page-1)*30)..endNum)
             {
 
                 returnMsg +=WordsMatch( duelList[i].Player1)
 
-                if(tagData.TagPlayerAndTag[duelList[i].Player1] !=null ){
-                    if(tagData.TagPlayerAndTag[duelList[i].Player1]?.isNotEmpty() == true){
-                        tagData.TagPlayerAndTag[duelList[i].Player1]?.forEach{
-                            returnMsg += " #$it"
-                        }
-                    }
-                }
+                returnMsg += SerchTag(duelList[i].Player1)
 
 
                 returnMsg += "\n排名："+duelList[i].player1Rank+"  胜率："+duelList[i].player1Ratio + "%"+ "\nVS\n"+
                         WordsMatch(duelList[i].Player2)
 
-                if(tagData.TagPlayerAndTag[duelList[i].Player2] !=null ){
-                    if(tagData.TagPlayerAndTag[duelList[i].Player2]?.isNotEmpty() == true){
-                        tagData.TagPlayerAndTag[duelList[i].Player2]?.forEach{
-                            returnMsg += " #$it"
-                        }
-                    }
-                }
+                returnMsg += SerchTag(duelList[i].Player2)
+//                if(tagData[duelList[i].Player2] !=null ){
+//                    if(tagData[duelList[i].Player2]?.isNotEmpty() == true){
+//                        tagData[duelList[i].Player2]?.forEach{
+//                            returnMsg += " #$it"
+//                        }
+//                    }
+//                }
 
                 returnMsg += "\n排名："+duelList[i].player2Rank+"  胜率："+duelList[i].player2Ratio+"%"
 
@@ -1105,7 +1156,8 @@ class Command {
                 var rank = 1
 
                 resultMatch.forEach{
-                    returnMsg +=rank.toString() +". 玩家名：" + WordsMatch(it.groupValues[1]) + "\n胜率：" +
+                    val tag = SerchTag(WordsMatch(it.groupValues[1]))
+                    returnMsg +=rank.toString() +". 玩家名：" + WordsMatch(it.groupValues[1]) + tag + "\n胜率：" +
                             "%.2f".format((it.groupValues[3].toFloat()/(it.groupValues[3].toFloat()+it.groupValues[4].toFloat()+it.groupValues[5].toFloat()))*100) +
                             "% D.P："+it.groupValues[2].toFloat().toInt().toString() + "{forwardmessage的分割符}"
                     rank ++
@@ -1391,10 +1443,32 @@ class Command {
             {
                 //修改用户数据并添加到列表
                 UserSearchDataList.add(IsInUserList)
-                //返回单卡数据
-                return SearchCard(IsInUserList.UserSearchContent,(IsInUserList.UserSearchPage-1)*10,IsInUserList.UserSearchCard,"日文调整") +
+                var returnMessage = SearchCard(IsInUserList.UserSearchContent,(IsInUserList.UserSearchPage-1)*10,IsInUserList.UserSearchCard,"日文调整") +
                         "{forwardmessage的分割符}" +
                         SearchCard(IsInUserList.UserSearchContent,(IsInUserList.UserSearchPage-1)*10,IsInUserList.UserSearchCard,"日文faq")
+                if(returnMessage.length>5000){
+                    //查卡
+                    val replaceWith = Regex(" ")
+                    val cardToSearchInURL =replaceWith.replace(URLEncoder.encode(IsInUserList.UserSearchContent,"UTF-8"),"+")
+
+
+
+                    var WebData = GetWebSourceCode("https://ygocdb.com/more?search=$cardToSearchInURL&start=${(IsInUserList.UserSearchPage-1)*10}")
+
+                    val  resultMatch = Regex("""<h3><span>(\d*?)</span>&nbsp;[\s\S]*?<strong class="name"><span>(.*?)</span><br></strong>.*\s.*\s*(.*)""").findAll(WebData).toList()
+
+                    if(resultMatch.isEmpty()){
+                        return "没有找到相关的东西"
+                    }
+
+                    val WebDataCard = GetWebSourceCode("https://ygocdb.com/card/"+resultMatch[IsInUserList.UserSearchCard - 1].groupValues[1])
+                    val QAUrl= Regex("""title="数据库编号">(\d*)</span>""").findAll(WebDataCard).toList()
+
+                    returnMessage = "长度太长，超出QQ发送字数限制了，自己去官网看吧\n网址：https://www.db.yugioh-card.com/yugiohdb/faq_search.action?ope=4&cid=${QAUrl[0].groupValues[1]}&request_locale=ja"
+
+                }
+                //返回单卡数据
+                return returnMessage
             }
         }
 
@@ -1409,27 +1483,41 @@ class Command {
                 if(IsInUserList.UserSearchContent == ""){
                     return "null"
                 }
-                else if(IsInUserList.UserSearchProcess.toInt() == 1)//如果是在单卡查询里了
-                {
-                    //修改用户数据并添加到列表
-                    IsInUserList.UserSearchCard = cardNumber.toInt()
-                    IsInUserList.UserSearchProcess = 0
-                    UserSearchDataList.add(IsInUserList)
-                    //返回单卡数据
-                    return SearchCard(IsInUserList.UserSearchContent,(IsInUserList.UserSearchPage-1)*10,IsInUserList.UserSearchCard,"日文调整") +
-                            "{forwardmessage的分割符}" +
-                            SearchCard(IsInUserList.UserSearchContent,(IsInUserList.UserSearchPage-1)*10,IsInUserList.UserSearchCard,"日文faq")
-                }
                 else//翻页//翻页
                 {
                     //修改用户数据并添加到列表
                     IsInUserList.UserSearchCard = cardNumber.toInt()
                     IsInUserList.UserSearchProcess = 0
                     UserSearchDataList.add(IsInUserList)
-                    //返回单卡数据
-                    return SearchCard(IsInUserList.UserSearchContent,(IsInUserList.UserSearchPage-1)*10,IsInUserList.UserSearchCard,"日文调整") +
+
+
+                    var returnMessage = SearchCard(IsInUserList.UserSearchContent,(IsInUserList.UserSearchPage-1)*10,IsInUserList.UserSearchCard,"日文调整") +
                             "{forwardmessage的分割符}" +
                             SearchCard(IsInUserList.UserSearchContent,(IsInUserList.UserSearchPage-1)*10,IsInUserList.UserSearchCard,"日文faq")
+                    if(returnMessage.length>5000) {
+                        //查卡
+                        val replaceWith = Regex(" ")
+                        val cardToSearchInURL =
+                            replaceWith.replace(URLEncoder.encode(IsInUserList.UserSearchContent, "UTF-8"), "+")
+
+
+                        var WebData =GetWebSourceCode("https://ygocdb.com/more?search=$cardToSearchInURL&start=${(IsInUserList.UserSearchPage - 1) * 10}")
+
+                        val resultMatch =
+                            Regex("""<h3><span>(\d*?)</span>&nbsp;[\s\S]*?<strong class="name"><span>(.*?)</span><br></strong>.*\s.*\s*(.*)""").findAll(WebData).toList()
+
+                        if (resultMatch.isEmpty()) {
+                            return "没有找到相关的东西"
+                        }
+                        val WebDataCard = GetWebSourceCode("https://ygocdb.com/card/"+resultMatch[IsInUserList.UserSearchCard - 1].groupValues[1])
+                        val QAUrl= Regex("""title="数据库编号">(\d*)</span>""").findAll(WebDataCard).toList()
+
+                        returnMessage = "长度太长，超出QQ发送字数限制了，自己去官网看吧\n网址：https://www.db.yugioh-card.com/yugiohdb/faq_search.action?ope=4&cid=${QAUrl[0].groupValues[1]}&request_locale=ja"
+
+                    }
+
+                    //返回单卡数据
+                    return returnMessage
                 }
 
             }
@@ -1742,19 +1830,17 @@ class Command {
 
 
 
-            var subData =  GroupPlayerTags.data.getOrPut(GroupID){ TagGroupData(mutableMapOf<String,MutableList<String>>()) }
+            var subData =  GroupPlayerTags.data.getOrPut(playerToCheck){mutableListOf<String>()}
 
-            var subsubData = subData.TagPlayerAndTag.getOrPut(matchResult.groupValues[1]){ mutableListOf<String>() }
-
-            if(subsubData.indexOf(matchResult.groupValues[2])!=-1){
+            if(subData.indexOf(matchResult.groupValues[2])!=-1){
                 return "该tag已经添加过了"
             }
 
-            subsubData.add(matchResult.groupValues[2])
+            subData.add(matchResult.groupValues[2])
 
             var returnMessage = "添加成功，当前玩家tag："
 
-            subsubData.forEach{
+            subData.forEach{
                 returnMessage+="#"+it+" "
             }
 
@@ -1763,16 +1849,15 @@ class Command {
 
 
         if(arg.startsWith("查看tag")||arg.startsWith("看看#")){
-            var subData =  GroupPlayerTags.data.getOrPut(GroupID){ TagGroupData(mutableMapOf<String,MutableList<String>>()) }
             var returnMessage ="以下为本群所有玩家及tag"
-            subData.TagPlayerAndTag.forEach{
+            GroupPlayerTags.data.forEach{
                 returnMessage += "\n"
 
                 val subsubData = it.value
 
 
                 if(subsubData.isEmpty()){
-                    subData.TagPlayerAndTag.remove(it.key)
+                    GroupPlayerTags.data.remove(it.key)
                 }
                 else{
                     returnMessage += it.key +":"
@@ -1788,19 +1873,17 @@ class Command {
 
         if(arg.startsWith("删除tag ")||arg.startsWith("掉帽子 ")){
             val matchResult = Regex(""".*? ([\s\S]*) ([\s\S]*)""").find(arg)?:return "null"
-            var subData =  GroupPlayerTags.data.getOrPut(GroupID){ TagGroupData(mutableMapOf<String,MutableList<String>>()) }
+            var subData =  GroupPlayerTags.data
 
-            var subsubData = subData.TagPlayerAndTag.getOrPut(matchResult.groupValues[1]){ mutableListOf<String>() }
-
-            if(subsubData.indexOf(matchResult.groupValues[2])==-1){
+            if(subData.get(matchResult.groupValues[2])?.isNotEmpty() == true){
                 return "玩家并无该tag"
             }
 
-            subsubData.remove(matchResult.groupValues[2])
+            subData.remove(matchResult.groupValues[2])
 
             var returnMessage = "删除成功！当前玩家tag："
 
-            subsubData.forEach{
+            subData.forEach{
                 returnMessage+="#"+it+" "
             }
 
