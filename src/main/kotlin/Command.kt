@@ -14,6 +14,7 @@ import io.ktor.http.*
 import io.ktor.websocket.*
 import kotlinx.coroutines.*
 import net.mamoe.mirai.Bot
+import net.mamoe.mirai.console.util.ConsoleExperimentalApi
 import net.mamoe.mirai.console.util.ContactUtils.getContactOrNull
 import net.mamoe.mirai.contact.Contact
 import net.mamoe.mirai.utils.info
@@ -810,7 +811,7 @@ class Command {
 
 
     //处理指令
-    @net.mamoe.mirai.console.util.ConsoleExperimentalApi
+    @ConsoleExperimentalApi
     suspend fun ProcessingCommand(arg: String,user:Contact,GroupID:Long):String{
 
         val userID = user.id
@@ -918,13 +919,32 @@ class Command {
 
         if(arg.contains("月历史 ")){
             val matchResult = Regex("""(\d*)月历史 ([\s\S]*)""").find(arg)?:return "null"
+            val yearMatchResult = Regex("""(\d*)年(\d*)月历史 ([\s\S]*)""").find(arg)?:null
             val calendar = Calendar.getInstance()
             val currentYear = calendar.get(Calendar.YEAR)
             val currentMonth = calendar.get(Calendar.MONTH) + 1
-            val TargetMonth = matchResult.groupValues[1].toInt()
-            if(TargetMonth>currentMonth ||TargetMonth<0){
-                return "请正确输入月份"
+            var targetYear = currentYear
+            if(yearMatchResult!=null){
+                targetYear = yearMatchResult.groupValues[1].toInt()
+                if(targetYear<=2000){
+                    targetYear = currentYear
+                }
             }
+            val TargetMonth = matchResult.groupValues[1].toInt()
+            val dateFormat =  DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
+            val targetDate:LocalDateTime
+            if(TargetMonth <10){
+                targetDate = LocalDateTime.parse("$targetYear-0$TargetMonth-01 00:00:00",dateFormat)
+            }
+            else{
+                targetDate = LocalDateTime.parse("$targetYear-$TargetMonth-01 00:00:00",dateFormat)
+            }
+//            if(TargetMonth>currentMonth ||TargetMonth<0){
+//                return "请正确输入月份"
+//            val formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
+//            val dateTime = LocalDateTime.parse(input, formatter)
+//            val newDateTime = dateTime.plusHours(addTime)
+//            }
             val playerToCheck = matchResult.groupValues[2]
             val playerNameInURL = URLEncoder.encode( playerToCheck,"UTF-8")
 
@@ -942,30 +962,40 @@ class Command {
 
             //时间
 
-            val dateFormat =  DateTimeFormatter.ofPattern("yyyy-MM-dd")
 
-            var FTime = LocalDate.parse(ResultMatch[ResultMatch.size-1].groupValues[7], dateFormat)
 
+            var FTime = LocalDateTime.parse(ResultMatch[ResultMatch.size-1].groupValues[7]+" "+ResultMatch[ResultMatch.size-1].groupValues[8], dateFormat)//搜索的结果里最早的时间
+            FTime = FTime.plusHours(8)
             var pageNum = 500
             var StartNum = 0
             var RecordSize = 0
+            var resultSize = 0
             logger.info(TargetMonth.toString())
             logger.info(FTime.toString())
-            while (FTime.year == currentYear && FTime.monthValue >= TargetMonth){
+            //查记录本身
+            while (FTime >= targetDate){
+
                 WebData = GetWebSourceCode("https://sapi.moecube.com:444/ygopro/arena/history?username=${playerNameInURL}&type=1&page_num=" + pageNum)
                 ResultMatch = Regex(""""usernamea":"(.*?)","usernameb":"(.*?)","[\s\S]*?"pta":(.*?),"ptb":(.*?),"pta_ex":(.*?),"ptb_ex":(.*?),"[\s\S]*?"start_time":"(.*?)T(.*?).000Z","end_time":"(.*?)T(.*?).000Z","winner":"(.*?)","isfirstwin":(.*?),""").findAll(WebData).toList()
                 if(ResultMatch.size<pageNum-1){
                     break
                 }
-                FTime = LocalDate.parse(ResultMatch[ResultMatch.size-1].groupValues[7], dateFormat)
+                FTime = LocalDateTime.parse(ResultMatch[ResultMatch.size-1].groupValues[7]+" "+ResultMatch[ResultMatch.size-1].groupValues[8], dateFormat)
+                FTime = FTime.plusHours(8)
                 logger.info(FTime.toString())
-                if(pageNum >= 10000){
-                    return "报错：超出页数极限"
+//                if(pageNum >= 10000){
+//                    return "报错：超出页数极限"
+//                }
+                if(ResultMatch.size == resultSize){
+                    return "超过最早记录"
                 }
-                pageNum += 500
+                resultSize = ResultMatch.size
+                pageNum += pageNum*2
             }
             for(i in ResultMatch.size-1 downTo 0){
-                if(LocalDate.parse(ResultMatch[i].groupValues[7], dateFormat).monthValue == TargetMonth && currentYear == LocalDate.parse(ResultMatch[i].groupValues[7], dateFormat).year){
+                var localTime = LocalDateTime.parse(ResultMatch[i].groupValues[7]+" "+ResultMatch[i].groupValues[8], dateFormat)
+                localTime = localTime.plusHours(8)
+                if(localTime.monthValue == TargetMonth && targetYear == localTime.year){
                     RecordSize = i
                     break
                 }
@@ -978,11 +1008,20 @@ class Command {
                 return "没有记录"
             }
             for(i in RecordSize downTo 0){
-                if(LocalDate.parse(ResultMatch[i].groupValues[7], dateFormat).monthValue > TargetMonth){
-                    StartNum = i+1
-                    break
+                var localTime = LocalDateTime.parse(ResultMatch[i].groupValues[7]+" "+ResultMatch[i].groupValues[8], dateFormat)
+                localTime = localTime.plusHours(8)
+                if(TargetMonth == 12){
+                    if(localTime.monthValue == 1 && targetYear+1 == localTime.year){
+                        StartNum = i+1
+                        break
+                    }
                 }
-
+                else{
+                    if(localTime.monthValue > TargetMonth&& targetYear == localTime.year){
+                        StartNum = i+1
+                        break
+                    }
+                }
             }
 
             //胜率and打卡情况
@@ -1011,10 +1050,25 @@ class Command {
                 ResultMatch[StartNum].groupValues[4].toFloat()
             }
 
+            //排名
+            var rankData =""
+            if (TargetMonth <10){
+                rankData =GetWebSourceCode("https://sapi.moecube.com:444/ygopro/arena/historyScore?username=${playerNameInURL}&season=$targetYear-0${TargetMonth}")
+            }
+            else{
+                rankData =GetWebSourceCode("https://sapi.moecube.com:444/ygopro/arena/historyScore?username=${playerNameInURL}&season=$targetYear-${TargetMonth}")
+            }
+            logger.info("获得排名网址：https://sapi.moecube.com:444/ygopro/arena/historyScore?username=${playerNameInURL}&season=$targetYear-${TargetMonth}")
+            val rankResultMatch = Regex("""rank":(.*?),"pt"""").find(rankData)?:null
 
             //String.format("%02d", date.monthValue)
             //logger.info("当前月份: $currentMonth" + "当前年份: $currentYear")
-            return "玩家："+playerToCheck +"\n"+ TargetMonth+"月场次：" + (RecordSize+1-StartNum).toString() +"\n" + "打卡情况：" + FirstWinNum.toString() + "\n"+ TargetMonth+"月胜率：" +"%.2f".format((winNum.toFloat()/(RecordSize+1-StartNum).toFloat())*100)+"%"+"\n" + "月初分数：" + StartDP.toInt() + "||" + "月末分数：" + EndDP.toInt() + "\n"+ "分数变化：" + (EndDP - StartDP).toInt()
+            if(rankResultMatch != null){
+                return "玩家："+playerToCheck +"\n"+ TargetMonth+"月场次：" + (RecordSize+1-StartNum).toString() +"\n" + "打卡情况：" + FirstWinNum.toString() + "\n"+ TargetMonth+"月胜率：" +"%.2f".format((winNum.toFloat()/(RecordSize+1-StartNum).toFloat())*100)+"%"+"\n" + "月初分数：" + StartDP.toInt() + "||" + "月末分数：" + EndDP.toInt() + "\n"+ "分数变化：" + (EndDP - StartDP).toInt()+ "\n结算排名："+rankResultMatch.groupValues[1]
+            }
+            else{
+                return "玩家："+playerToCheck +"\n"+ TargetMonth+"月场次：" + (RecordSize+1-StartNum).toString() +"\n" + "打卡情况：" + FirstWinNum.toString() + "\n"+ TargetMonth+"月胜率：" +"%.2f".format((winNum.toFloat()/(RecordSize+1-StartNum).toFloat())*100)+"%"+"\n" + "月初分数：" + StartDP.toInt() + "||" + "月末分数：" + EndDP.toInt() + "\n"+ "分数变化：" + (EndDP - StartDP).toInt()
+            }
             //"||"+LTime.year.toString()+ "||" +LTime.monthValue.toString() + "||" + "当前月份: $currentMonth" + "当前年份: $currentYear")
 
         }

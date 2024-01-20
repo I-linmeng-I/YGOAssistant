@@ -1,5 +1,6 @@
 package Linmeng
 
+import Linmeng.Data.PluginData.GroupPlayerTags
 import io.ktor.client.*
 import io.ktor.client.engine.okhttp.*
 import io.ktor.client.plugins.*
@@ -29,7 +30,7 @@ object YGOAssisttant : KotlinPlugin(
     JvmPluginDescription(
         id = "com.linmeng.YGOAssisttant",
         name = "YGOAssisttant",
-        version = "1.4.5",
+        version = "1.4.6",
     ) {
         author("linmeng")
     }
@@ -40,6 +41,7 @@ object YGOAssisttant : KotlinPlugin(
         Config.reload()
         GroupScribtion.reload()
         PersonalSubscription.reload()
+        GroupPlayerTags.reload()
 
         logger.info{"配置与数据加载完毕"}
 
